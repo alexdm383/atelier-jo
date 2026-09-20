@@ -196,6 +196,13 @@ footer{padding:36px 0;text-align:center;color:var(--ink3);font-size:12.5px;font-
         <li>Verser les notices dans la file d'attente, sans encore les saisir</li>
       </ul>
     </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag" style="background:var(--ochre)">Avant de partir</span><span class="tps">10 min</span></div>
+      <div class="obj"><b>Rituel de fin de journée</b>Chaque stagiaire exporte son travail et le transmet — voir Aide-mémoire.</div>
+      <ul>
+        <li>Onglet <b>Données</b> → <b>Export JSON</b> ; déposer le fichier dans le dossier partagé désigné par le responsable</li>
+      </ul>
+    </div>
   </div>
 </section>
 
@@ -254,11 +261,17 @@ footer{padding:36px 0;text-align:center;color:var(--ink3);font-size:12.5px;font-
       </ul>
     </div>
     <div class="creneau">
-      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">1h</span></div>
+      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">45 min</span></div>
       <div class="obj"><b>Objectif</b>Connaître les onglets de suivi, même hors de leur usage quotidien.</div>
       <ul>
         <li>Onglet <b>Mesures</b> : accord entre annotateurs, temps médian de saisie</li>
-        <li>Onglet <b>Données</b> : export JSON/CSV — « c'est votre sauvegarde »</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag" style="background:var(--ochre)">Avant de partir</span><span class="tps">10 min</span></div>
+      <div class="obj"><b>Rituel de fin de journée</b>Export et transmission au responsable — voir Aide-mémoire.</div>
+      <ul>
+        <li>Onglet <b>Données</b> → <b>Export JSON</b> ; déposer le fichier dans le dossier partagé désigné par le responsable</li>
       </ul>
     </div>
   </div>
@@ -303,7 +316,14 @@ footer{padding:36px 0;text-align:center;color:var(--ink3);font-size:12.5px;font-
       </ul>
     </div>
     <div class="creneau">
-      <div class="cn-head"><span class="tag">Bilan</span><span class="tps">30 min</span></div>
+      <div class="cn-head"><span class="tag" style="background:var(--ochre)">Avant de partir</span><span class="tps">10 min</span></div>
+      <div class="obj"><b>Rituel de fin de journée</b>Dernier export : c'est celui qui compte le plus, il consolide les trois jours.</div>
+      <ul>
+        <li>Onglet <b>Données</b> → <b>Export JSON</b> ; transmission finale au responsable</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Bilan</span><span class="tps">20 min</span></div>
       <ul>
         <li>Tour de table, remise de l'aide-mémoire imprimé</li>
       </ul>
@@ -373,18 +393,27 @@ footer{padding:36px 0;text-align:center;color:var(--ink3);font-size:12.5px;font-
   </div>
 
   <h3 class="sub">Rôles</h3>
-  <div class="card-role"><span class="role">Stagiaire</span><p>Versement, Numériser et traiter, Saisie. Enregistre et envoie au contrôle — ne valide jamais soi-même.</p></div>
-  <div class="card-role"><span class="role">Opérateur</span><p>Mêmes accès que le stagiaire, plus Mesures et Données.</p></div>
+  <div class="card-role"><span class="role">Stagiaire</span><p>Versement, Numériser et traiter, Saisie, et un accès limité à Données (export seulement). Enregistre et envoie au contrôle — ne valide jamais soi-même, n'importe ni ne supprime.</p></div>
+  <div class="card-role"><span class="role">Opérateur</span><p>Mêmes accès que le stagiaire, plus Mesures et l'accès complet à Données (import, fusion, suppression).</p></div>
   <div class="card-role"><span class="role">Contrôleur qualité</span><p>Sous-rôle de l'opérateur : valide ou refuse (avec motif) les fiches envoyées au contrôle.</p></div>
   <div class="card-role"><span class="role">Administrateur</span><p>Tous les accès, y compris Comptes et Commandes.</p></div>
 
-  <h3 class="sub">Le cycle en quatre étapes</h3>
+  <h3 class="sub">Le cycle en cinq étapes</h3>
   <table class="ref">
     <tr><th>Étape</th><th>Onglet</th><th>Ce qu'on y fait</th></tr>
     <tr><td class="mono">1</td><td>Versement</td><td>Reprendre le lot numérisé, établir le bordereau</td></tr>
     <tr><td class="mono">2</td><td>Numériser et traiter</td><td>Repérer automatiquement les actes de chaque page</td></tr>
     <tr><td class="mono">3</td><td>Saisie</td><td>Corriger et compléter la fiche, envoyer au contrôle</td></tr>
     <tr><td class="mono">4</td><td>Contrôle qualité →</td><td>Validation par le contrôleur ; la fiche rejoint alors le catalogue public</td></tr>
+    <tr><td class="mono">5</td><td>Données</td><td>Chaque poste de travail est isolé : exporter et transmettre est ce qui fait exister le catalogue commun</td></tr>
+  </table>
+
+  <h3 class="sub">Transmettre son travail</h3>
+  <p style="color:var(--ink2);font-size:13.5px;max-width:620px;margin:0 0 12px">Chaque stagiaire travaille sur son propre poste, dans son propre navigateur — rien n'est partagé automatiquement entre les postes. C'est l'export qui fait le lien.</p>
+  <table class="ref">
+    <tr><th>Qui</th><th>Quoi</th><th>Où</th></tr>
+    <tr><td>Stagiaire</td><td>Onglet Données → <b>Export JSON</b>, en fin de chaque journée</td><td>Dossier partagé désigné par le responsable (à communiquer avant le Jour 1)</td></tr>
+    <tr><td>Responsable / opérateur</td><td>Onglet Données → <b>Importer et fusionner</b> pour chaque fichier reçu</td><td>Sur le poste qui tient le catalogue commun — les fiches déjà présentes ne sont pas dupliquées</td></tr>
   </table>
 
   <h3 class="sub">Dépannage</h3>

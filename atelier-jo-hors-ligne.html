@@ -221,7 +221,7 @@ const PERMISSIONS={
   admin:      ['versement','tele','saisie','mesures','donnees','comptes','commandes','controle'],
   operateur:  ['versement','tele','saisie','mesures','donnees'],
   controleur: ['versement','tele','saisie','mesures','donnees','controle'],
-  stagiaire:  ['versement','tele','saisie'],
+  stagiaire:  ['versement','tele','saisie','donnees'],
   chercheur:  []
 };
 const ROLES=[['admin','Administrateur'],['operateur','Opérateur'],['controleur','Opérateur — contrôleur qualité'],['stagiaire','Stagiaire'],['chercheur','Chercheur (public)']];
@@ -655,7 +655,8 @@ Object.assign(EN,{
 "Deux voies de reconnaissance":"Two recognition routes",
 "Disposition":"Provision","Dossier":"File","Entité RiC":"RiC entity","Exigence":"Requirement",
 "Export CSV":"CSV export","Export JSON":"JSON export",
-"Exportez à chaque fin de séance : c'est votre sauvegarde.":"Export at the end of every session: this is your backup.",
+"Exportez à chaque fin de séance et transmettez le fichier au responsable (dossier partagé, e-mail) : c'est votre sauvegarde, et c'est ainsi que votre travail rejoint le catalogue commun.":"Export at the end of every session and send the file to the person in charge (shared folder, e-mail): this is your backup, and it's how your work joins the common catalogue.",
+"Chargez le fichier exporté par un stagiaire ou un autre archiviste pour l'ajouter au catalogue commun. Les fiches déjà présentes ne sont pas dupliquées.":"Load the file exported by an intern or another archivist to add it to the common catalogue. Descriptions already present are not duplicated.",
 "Fermer":"Close","Fonctionnement":"How it works",
 "ISAD(G) impose la description à plusieurs niveaux, du général au particulier. Les trois niveaux ci-dessous sont déduits de la provenance des notices : fonds, série, unité documentaire, puis pièce.":"ISAD(G) requires multi-level description, from the general to the specific. The levels below are derived from the provenance of the descriptions: fonds, series, file, then item.",
 "ISAD(G) — description archivistique":"ISAD(G) — archival description",
@@ -2082,6 +2083,7 @@ function renderMesures(){
 // ══════════════════════════════════════════════════ 4. DONNÉES
 function renderDonnees(){
   const N=DB.notices;
+  const stg=UTILISATEUR.role==='stagiaire';
   const D=[
     [t('Enregistrement automatique','Automatic saving'), !memoryOnly, memoryOnly?t("Absent. Enregistrez le fichier avant de fermer.","Absent. Save the file before closing."):t("Disponible.","Available.")],
     [t('Lecture des PDF','Reading PDFs'), !!window.pdfjsLib, !window.pdfjsLib?t("Absente : pdf.min.js doit \u00eatre dans le m\u00eame dossier.","Absent: pdf.min.js must be in the same folder."):(location.protocol==='file:'?t("Disponible en mode d\u00e9grad\u00e9 : la page est ouverte en fichier local, le lecteur travaille sans script auxiliaire. Plus lent sur les gros PDF.","Available in degraded mode: the page is opened as a local file, the reader works without a helper script. Slower on large PDFs."):t("Disponible.","Available."))],
@@ -2095,24 +2097,25 @@ function renderDonnees(){
   <div class="card"><h2>\u00c9tat de l'installation</h2>
     <table><tr><th>Fonction</th><th>\u00c9tat</th><th>D\u00e9tail</th></tr>
     ${D.map(([t,ok,d])=>`<tr><td>${t}</td><td style="color:${ok?'#255536':'var(--ochre)'}">${ok?'disponible':'indisponible'}</td><td>${d}</td></tr>`).join('')}</table></div>
-  <div class="card"><h2>Exporter</h2><p class="sub">Exportez à chaque fin de séance : c'est votre sauvegarde.</p>
+  <div class="card"><h2>Exporter</h2><p class="sub">Exportez à chaque fin de séance et transmettez le fichier au responsable (dossier partagé, e-mail) : c'est votre sauvegarde, et c'est ainsi que votre travail rejoint le catalogue commun.</p>
     <div class="actions"><button class="b pri" id="ej">Export JSON</button><button class="b" id="ec">Export CSV</button></div></div>
+  ${stg?'':`
   <div class="card"><h2>Importer et fusionner</h2>
-    <p class="sub">Chargez le fichier d'un autre archiviste pour calculer l'accord. Les fiches déjà présentes ne sont pas dupliquées.</p>
+    <p class="sub">Chargez le fichier exporté par un stagiaire ou un autre archiviste pour l'ajouter au catalogue commun. Les fiches déjà présentes ne sont pas dupliquées.</p>
     <input type="file" id="imp" accept=".json"><div id="im" class="hint"></div></div>
   <div class="card"><h2>Jeu de démonstration</h2>
     <p class="sub">Huit notices du JO spécial n° 4 du 1<sup>er</sup> mars 2024, pour démarrer un cours sur un catalogue déjà alimenté.</p>
     <div class="actions"><button class="b" id="seed">Charger les 8 notices</button>
-      ${N.length?`<button class="b" id="wipe" style="color:var(--red)">Tout effacer</button>`:''}</div></div>
+      ${N.length?`<button class="b" id="wipe" style="color:var(--red)">Tout effacer</button>`:''}</div></div>`}
   <div class="card"><h2>Notices enregistrées</h2>
-    ${N.length?`<table><tr><th>Archiviste</th><th>Mode</th><th>Type</th><th>Intitulé</th><th>Statut</th><th>Durée</th><th></th></tr>
+    ${N.length?`<table><tr><th>Archiviste</th><th>Mode</th><th>Type</th><th>Intitulé</th><th>Statut</th><th>Durée</th>${stg?'':'<th></th>'}</tr>
     ${N.slice().reverse().map(n=>{
       const statut=n.statut==='a_controler'?`<span style="color:var(--ochre)">à contrôler</span>`
         :n.statut==='refusee'?`<span style="color:var(--red)" title="${esc(n.motifControle||'')}">refusée${n.motifControle?' — '+esc(n.motifControle.slice(0,40)):''}</span>`
         :`<span style="color:#255536">validée</span>`;
       return `<tr><td>${esc(n.annotateur)}</td><td>${esc(tMode(n.mode))}</td><td>${esc(tType(n.type))||'—'}</td>
       <td>${esc((LANG==='en'?(n.intitule_en||n.intitule_fr):(n.intitule_fr||n.intitule_en))||n.intitule||'').slice(0,52)||'—'}</td><td style="font-size:12.5px">${statut}</td><td class="num">${fmt(n.duree_s||0)}</td>
-      <td><button class="b" style="padding:3px 9px;font-size:12px" data-del="${n.id}">Supprimer</button></td></tr>`;}).join('')}</table>`
+      ${stg?'':`<td><button class="b" style="padding:3px 9px;font-size:12px" data-del="${n.id}">Supprimer</button></td>`}</tr>`;}).join('')}</table>`
     :'<p class="empty">Aucune notice.</p>'}</div>`;
 
   const jour=()=>new Date().toISOString().slice(0,10);
@@ -2122,14 +2125,16 @@ function renderDonnees(){
     const q=v=>'"'+String(Array.isArray(v)?v.join('; '):(v==null?'':v)).replace(/"/g,'""')+'"';
     tele('depouillement-'+jour()+'.csv','\uFEFF'+[cols.join(',')].concat(N.map(n=>cols.map(c=>q(n[c])).join(','))).join('\n'),'text/csv;charset=utf-8');
   };
-  document.getElementById('imp').onchange=e=>{ const f=e.target.files[0]; if(!f)return;
+  const impEl=document.getElementById('imp');
+  if(impEl) impEl.onchange=e=>{ const f=e.target.files[0]; if(!f)return;
     const r=new FileReader(); r.onload=async()=>{ try{ const o=JSON.parse(r.result);
       const h=new Set(DB.notices.map(x=>x.id)), a=(o.notices||[]).filter(x=>!h.has(x.id));
       DB.notices.push(...a); ANCRAGE=null; await save();
       document.getElementById('im').textContent=a.length+' notice(s) ajoutée(s).'; renderDonnees();
     }catch(x){ document.getElementById('im').textContent="Fichier illisible."; } };
     r.readAsText(f); };
-  document.getElementById('seed').onclick=async()=>{
+  const seedEl=document.getElementById('seed');
+  if(seedEl) seedEl.onclick=async()=>{
     const h=new Set(DB.notices.map(x=>x.id));
     DB.notices.push(...SEED.filter(s=>!h.has(s.id))); ANCRAGE=null; await save(); renderDonnees();
   };
