@@ -1,0 +1,414 @@
+<title>Formation Atelier du Journal officiel</title>
+<style>
+:root{
+  --paper:#F3F4F0;--card:#FFF;--ink:#1B2025;--ink2:#525C66;--ink3:#8A939C;
+  --rule:#DEE2DA;--ruleS:#C4CBBF;--blue:#2B4C7E;--blueBg:#E9EFF7;
+  --ochre:#8A6D1F;--ochreBg:#F8F2DF;--green:#2B6B4A;--greenBg:#E8F2ED;
+  --red:#8C3A3A;--redBg:#F8EAEA;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;padding-bottom:60px}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:500;margin:0;text-wrap:balance}
+a{color:var(--blue)}
+.wrap{max-width:920px;margin:0 auto;padding:0 20px}
+
+/* ---- header ---- */
+header.hero{background:var(--ink);color:#F3F4F0;padding:44px 0 36px}
+header.hero .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#B9C4CE;margin-bottom:10px}
+header.hero h1{font-size:34px;color:#fff;line-height:1.15}
+header.hero p.lede{color:#C7CFD6;font-size:16px;max-width:640px;margin-top:12px}
+.hero-meta{display:flex;gap:28px;flex-wrap:wrap;margin-top:26px;font-family:var(--mono);font-size:12.5px;color:#C7CFD6}
+.hero-meta b{color:#fff;display:block;font-family:var(--sans);font-size:15px;font-weight:500;margin-top:2px}
+
+/* ---- sticky nav ---- */
+nav.tabs{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--rule);box-shadow:0 1px 0 rgba(0,0,0,.03)}
+nav.tabs .wrap{display:flex;gap:2px;overflow-x:auto}
+nav.tabs a{font-family:var(--mono);font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink2);text-decoration:none;padding:14px 16px;white-space:nowrap;border-bottom:2px solid transparent}
+nav.tabs a:hover{color:var(--ink);border-bottom-color:var(--ruleS)}
+
+section{padding:44px 0}
+section+section{border-top:1px solid var(--rule)}
+.section-head{margin-bottom:28px}
+.section-head .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+.section-head h2{font-size:26px}
+.section-head p{color:var(--ink2);max-width:640px;margin-top:8px}
+
+/* ---- day block ---- */
+.jour{background:var(--card);border:1px solid var(--rule);border-radius:10px;margin-bottom:22px;overflow:hidden}
+.jour-head{display:flex;align-items:baseline;gap:14px;padding:18px 22px;background:var(--blueBg);border-bottom:1px solid var(--rule)}
+.jour-head .num{font-family:var(--serif);font-size:22px;color:var(--blue)}
+.jour-head h3{font-size:18px;color:var(--ink)}
+.jour-head .duree{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--blue)}
+.creneau{padding:20px 22px;border-top:1px solid var(--rule)}
+.creneau:first-of-type{border-top:0}
+.creneau .cn-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.creneau .cn-head .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;background:var(--ink);color:#fff;border-radius:4px;padding:3px 8px}
+.creneau .cn-head .tps{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.creneau ul{margin:0;padding-left:20px}
+.creneau li{margin-bottom:7px}
+.creneau li b{color:var(--ink)}
+.obj{font-size:13.5px;color:var(--ink2);background:var(--paper);border-left:3px solid var(--ruleS);padding:8px 12px;border-radius:0 4px 4px 0;margin-bottom:14px}
+.obj b{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);display:block;margin-bottom:3px}
+
+/* ---- exercise cards ---- */
+.ex-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.ex-card{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:20px}
+.ex-card .lvl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:10px;display:inline-block;margin-bottom:10px}
+.lvl.reel{background:var(--greenBg);color:var(--green)}
+.lvl.construit{background:var(--ochreBg);color:var(--ochre)}
+.ex-card h4{font-size:16px;margin-bottom:8px}
+.ex-card p{color:var(--ink2);font-size:13.5px;margin:0 0 10px}
+.ex-card .but{font-size:13px;color:var(--ink)}
+.ex-card .but b{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:block;margin-bottom:3px}
+.ex-card .fichier{font-family:var(--mono);font-size:12px;color:var(--blue);background:var(--blueBg);padding:6px 9px;border-radius:5px;margin-top:10px;word-break:break-word}
+
+/* ---- reference tables ---- */
+table.ref{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--rule);border-radius:8px;overflow:hidden;margin-bottom:24px}
+table.ref th{background:var(--paper);font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:400;text-align:left;padding:9px 13px;border-bottom:1px solid var(--rule)}
+table.ref td{padding:10px 13px;border-bottom:1px solid var(--rule);font-size:13.5px;vertical-align:top}
+table.ref tr:last-child td{border-bottom:0}
+table.ref td.mono{font-family:var(--mono);font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.pill{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:9px;display:inline-block}
+.pill.ok{background:var(--greenBg);color:var(--green)}
+.pill.lent{background:var(--ochreBg);color:var(--ochre)}
+.pill.err{background:var(--redBg);color:var(--red)}
+
+h3.sub{font-size:16px;margin:32px 0 12px}
+h3.sub:first-child{margin-top:0}
+
+.card-role{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:16px 18px;margin-bottom:12px}
+.card-role .role{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--blue);text-transform:uppercase;letter-spacing:.04em}
+.card-role p{margin:6px 0 0;color:var(--ink2);font-size:13.5px}
+
+footer{padding:36px 0;text-align:center;color:var(--ink3);font-size:12.5px;font-family:var(--mono)}
+
+@media(max-width:720px){
+  .ex-grid{grid-template-columns:1fr}
+  header.hero h1{font-size:27px}
+  .hero-meta{gap:18px}
+}
+@media print{
+  nav.tabs{position:static}
+  header.hero{background:#fff!important;color:#111!important}
+  header.hero *{color:#111!important}
+  section{padding:20px 0;break-inside:avoid}
+}
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Archives Nationales du Cameroun</div>
+    <h1>Formation à l'Atelier du Journal officiel</h1>
+    <p class="lede">Programme de prise en main destiné aux stagiaires, du versement d'un lot numérisé jusqu'à la consultation du catalogue public — préparé en vue des soutenances.</p>
+    <div class="hero-meta">
+      <div>Durée<b>3 jours · ≈ 18 heures</b></div>
+      <div>Public<b>Stagiaires des Archives</b></div>
+      <div>Lieu / accès<b>alexdm383.github.io/atelier-jo</b></div>
+      <div>Prérequis<b>Aucun — connexion locale au poste</b></div>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="wrap">
+    <a href="#jour1">Jour 1</a>
+    <a href="#jour2">Jour 2</a>
+    <a href="#jour3">Jour 3</a>
+    <a href="#exercices">Exercices</a>
+    <a href="#memo">Aide-mémoire</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<section id="jour1">
+  <div class="section-head">
+    <div class="k">Programme — Jour 1</div>
+    <h2>Comprendre le fonds, puis le versement et le traitement</h2>
+    <p>Poser le cadre archivistique avant l'outil, puis suivre le début de la chaîne : de la réception d'un lot numérisé jusqu'au repérage automatique des actes qu'il contient.</p>
+  </div>
+
+  <div class="jour">
+    <div class="jour-head"><span class="num">01</span><h3>Cadre, rôles et catalogue public</h3><span class="duree">9h00 – 12h00</span></div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Présentation</span><span class="tps">45 min</span></div>
+      <div class="obj"><b>Objectif</b>Situer l'atelier dans son cadre légal et archivistique avant d'y toucher.</div>
+      <ul>
+        <li>Pourquoi cataloguer le Journal officiel : loi n° 2024/001 du 24 juillet 2024, article 26 (fichier unique accessible au public)</li>
+        <li>Parcours guidé de l'onglet <b>Normes</b> : ISAD(G), RiC, OAIS, InterPARES — ce que l'atelier applique concrètement et où</li>
+        <li>Le principe de <b>respect des fonds</b> : pourquoi un acte n'est jamais reclassé par thème</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">45 min</span></div>
+      <div class="obj"><b>Objectif</b>Savoir se connecter et situer son rôle parmi les autres.</div>
+      <ul>
+        <li>Ouverture sur le catalogue public par défaut ; menu <b>Espace professionnel</b> pour l'accès agents</li>
+        <li>Les rôles : administrateur, opérateur, contrôleur qualité, <b>stagiaire</b> — qui fait quoi</li>
+        <li>Connexion via le raccourci « Espace stagiaire », lecture du message sur la sécurité du prototype</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Exploration guidée</span><span class="tps">1h30</span></div>
+      <div class="obj"><b>Objectif</b>Comprendre à quoi sert leur futur travail, avant de le produire.</div>
+      <ul>
+        <li><b>Rechercher</b> : filtres par type d'acte, année, thème ; ouverture d'une fiche complète</li>
+        <li><b>Plan de classement</b> : fonds → série → dossier → pièce ; <b>Chronologie</b> : écart signature/publication</li>
+        <li><b>Instruments de recherche</b> : les 8 instruments générés, téléchargement au format Word</li>
+        <li><b>Assistant</b> : poser une question en langage libre sur le fonds chargé</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="jour">
+    <div class="jour-head"><span class="num">01</span><h3>Versement, puis numérisation et traitement</h3><span class="duree">13h30 – 16h30</span></div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">1h</span></div>
+      <div class="obj"><b>Objectif</b>Constituer un lot conforme avant tout traitement.</div>
+      <ul>
+        <li>Onglet <b>Versement</b> : désigner le dossier ou les fichiers du scanner, empreinte SHA-256 calculée à la reprise</li>
+        <li><b>Prescriptions de numérisation</b> : résolution, format de conservation vs format de diffusion — pourquoi les deux sont différents</li>
+        <li><b>Identification du lot</b> puis établissement du <b>bordereau de versement</b></li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">1h</span></div>
+      <div class="obj"><b>Objectif</b>Choisir la bonne voie de reconnaissance selon le document reçu.</div>
+      <ul>
+        <li>Onglet <b>Numériser et traiter</b> — les trois voies, et quand utiliser chacune :</li>
+      </ul>
+      <table class="ref" style="margin-top:10px">
+        <tr><th>Voie</th><th>Quand l'utiliser</th><th>Vitesse</th></tr>
+        <tr><td><b>Reconnaître le texte — sans réseau</b></td><td>Le PDF a déjà une couche texte (issu de la reconnaissance de caractères du scanner)</td><td><span class="pill ok">Rapide</span></td></tr>
+        <tr><td><b>Reconnaître par OCR</b></td><td>Scan brut ou photo sans couche texte — signalé par « aucune couche texte exploitable »</td><td><span class="pill lent">Plusieurs dizaines de s / page</span></td></tr>
+        <tr><td><b>Traiter avec le modèle</b></td><td>Accès réseau disponible ; ne pas en dépendre pour la formation</td><td><span class="pill lent">Dépend du réseau</span></td></tr>
+      </table>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Exercice guidé en groupe</span><span class="tps">1h30</span></div>
+      <div class="obj"><b>Objectif</b>Traiter un document réel ensemble avant de le faire seul demain.</div>
+      <ul>
+        <li>Versement puis traitement de <span class="fichier" style="display:inline">ARRETE N° 46-CAB-PR PORTANT NOMINATION…pdf</span> (voir Exercices)</li>
+        <li>Lecture commentée du <b>Déroulé</b> et du tableau des notices proposées</li>
+        <li>Verser les notices dans la file d'attente, sans encore les saisir</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="jour2">
+  <div class="section-head">
+    <div class="k">Programme — Jour 2</div>
+    <h2>Saisie, indexation et contrôle qualité</h2>
+    <p>Le cœur du métier : transformer une proposition automatique en description archivistique complète, fiable et citable.</p>
+  </div>
+
+  <div class="jour">
+    <div class="jour-head"><span class="num">02</span><h3>La fiche de saisie</h3><span class="duree">9h00 – 12h00</span></div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">1h</span></div>
+      <div class="obj"><b>Objectif</b>Comprendre le mode assisté et savoir en sortir si besoin.</div>
+      <ul>
+        <li>Onglet <b>Saisie</b> : mode <b>assisté</b> (fiche pré-remplie depuis la file) vs <b>manuel</b> (fiche vierge)</li>
+        <li>Parcours des zones ISAD(G) 1 à 7 dans le formulaire : identification, contexte, contenu, accès, sources complémentaires, points d'accès, notes</li>
+        <li>Champs bilingues (FR/EN) et le statut de la version anglaise</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">45 min</span></div>
+      <div class="obj"><b>Objectif</b>Savoir quand et comment signaler un problème plutôt que de forcer une saisie.</div>
+      <ul>
+        <li>Résumé analytique et indexation proposés : vérifier, corriger, jamais accepter aveuglément</li>
+        <li>Le bouton <b>Enregistrer et envoyer au contrôle</b> — ce que devient la fiche ensuite</li>
+        <li>Ce que fait le <b>contrôleur qualité</b> en aval (validation ou refus motivé) — les stagiaires ne valident pas eux-mêmes</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Exercice individuel</span><span class="tps">1h15</span></div>
+      <div class="obj"><b>Objectif</b>Boucler seul un cycle complet versement → traitement → saisie.</div>
+      <ul>
+        <li>Chaque stagiaire traite puis catalogue <span class="fichier" style="display:inline">DECRET N° 2022-412 PORTANT DETACHEMENT MAGISTRAT.pdf</span></li>
+        <li>Enregistrement de la fiche, chronomètre de saisie observé</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="jour">
+    <div class="jour-head"><span class="num">02</span><h3>Cas particuliers et bonnes pratiques</h3><span class="duree">13h30 – 16h30</span></div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Correction collective</span><span class="tps">1h</span></div>
+      <div class="obj"><b>Objectif</b>Apprendre des erreurs de saisie les plus fréquentes.</div>
+      <ul>
+        <li>Relecture croisée : un stagiaire commente la fiche d'un autre</li>
+        <li>Points de vigilance : date de signature vs date de publication, réserves de description, noms de personnes mal formés</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Exercice par scénario</span><span class="tps">1h30</span></div>
+      <div class="obj"><b>Objectif</b>Savoir remplir correctement les champs qui sortent du cas général.</div>
+      <ul>
+        <li>Quatre scénarios construits en saisie manuelle (voir Exercices) : abrogation, écart signature/publication important, version anglaise absente, page sans couche texte</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Démonstration</span><span class="tps">1h</span></div>
+      <div class="obj"><b>Objectif</b>Connaître les onglets de suivi, même hors de leur usage quotidien.</div>
+      <ul>
+        <li>Onglet <b>Mesures</b> : accord entre annotateurs, temps médian de saisie</li>
+        <li>Onglet <b>Données</b> : export JSON/CSV — « c'est votre sauvegarde »</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="jour3">
+  <div class="section-head">
+    <div class="k">Programme — Jour 3</div>
+    <h2>Consultation, restitution et préparation des soutenances</h2>
+    <p>Refermer la boucle : voir son propre travail vivre dans le catalogue public, puis s'entraîner à le présenter.</p>
+  </div>
+
+  <div class="jour">
+    <div class="jour-head"><span class="num">03</span><h3>Voir son travail dans le catalogue</h3><span class="duree">9h00 – 12h00</span></div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Atelier pratique</span><span class="tps">1h30</span></div>
+      <div class="obj"><b>Objectif</b>Retrouver et vérifier ses propres notices une fois validées.</div>
+      <ul>
+        <li>Recherche de ses propres actes saisis les jours précédents</li>
+        <li>Vérification de la fiche complète : citation, fac-similé, texte intégral</li>
+        <li>Onglet <b>Intégrité</b> : preuve d'empreinte, ce qu'elle prouve et ne prouve pas</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Questions / dépannage</span><span class="tps">1h30</span></div>
+      <div class="obj"><b>Objectif</b>Lever les blocages individuels avant la préparation de soutenance.</div>
+      <ul>
+        <li>Session libre, appui sur l'<b>aide-mémoire</b> (voir plus bas)</li>
+        <li>Revue des difficultés rencontrées les deux jours précédents</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="jour">
+    <div class="jour-head"><span class="num">03</span><h3>Répétition de soutenance</h3><span class="duree">13h30 – 16h30</span></div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Passage individuel</span><span class="tps">2h30</span></div>
+      <div class="obj"><b>Objectif</b>S'entraîner à présenter son parcours dans le temps imparti.</div>
+      <ul>
+        <li>10 minutes par stagiaire : présenter un acte de son choix, du versement à la fiche publiée</li>
+        <li>Questions du groupe, retours du formateur</li>
+      </ul>
+    </div>
+    <div class="creneau">
+      <div class="cn-head"><span class="tag">Bilan</span><span class="tps">30 min</span></div>
+      <ul>
+        <li>Tour de table, remise de l'aide-mémoire imprimé</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="exercices">
+  <div class="section-head">
+    <div class="k">Jeux de données</div>
+    <h2>Documents et scénarios d'exercice</h2>
+    <p>Deux documents réels du fonds pour les exercices guidés, et quatre scénarios construits pour couvrir les cas que ces deux documents ne rencontrent pas naturellement.</p>
+  </div>
+
+  <h3 class="sub">Documents réels</h3>
+  <div class="ex-grid">
+    <div class="ex-card">
+      <span class="lvl reel">Jour 1 · groupe</span>
+      <h4>Arrêté n° 46-CAB-PR</h4>
+      <p>Portant nomination de responsables dans les services chargés des relations avec les assemblées à la Présidence de la République.</p>
+      <div class="but"><b>Ce qu'il illustre</b>Plusieurs personnes nommées dans un seul acte ; formes « épouse » dans les patronymes, à signaler en réserve de description.</div>
+      <div class="fichier">ARRETE N° 46-CAB-PR PORTANT NOMINATION RESPONSABLES SERVICES CHARGES RELATIONS ASSEMBLEES.pdf</div>
+    </div>
+    <div class="ex-card">
+      <span class="lvl reel">Jour 2 · individuel</span>
+      <h4>Décret n° 2022-412</h4>
+      <p>Portant détachement d'un magistrat.</p>
+      <div class="but"><b>Ce qu'il illustre</b>Un acte simple, une seule personne concernée — cas de référence pour un premier cycle complet en autonomie.</div>
+      <div class="fichier">DECRET N° 2022-412 PORTANT DETACHEMENT MAGISTRAT.pdf</div>
+    </div>
+  </div>
+
+  <h3 class="sub">Scénarios construits (saisie manuelle)</h3>
+  <div class="ex-grid">
+    <div class="ex-card">
+      <span class="lvl construit">Scénario A</span>
+      <h4>Un acte qui en abroge un autre</h4>
+      <p>Saisir un décret fictif de 2024 dont l'article 2 abroge un texte de 2016. Renseigner le champ <b>Textes abrogés</b> avec la référence du texte de 2016.</p>
+      <div class="but"><b>Point de vigilance</b>Le texte abrogé n'est pas lui-même décrit dans le fonds : la relation reste signalée, non résolue.</div>
+    </div>
+    <div class="ex-card">
+      <span class="lvl construit">Scénario B</span>
+      <h4>Écart signature/publication important</h4>
+      <p>Signature en janvier, publication au Journal officiel plus de six mois plus tard.</p>
+      <div class="but"><b>Point de vigilance</b>Vérifier que le classement se fait bien sur la date de signature, pas sur celle du numéro du JO.</div>
+    </div>
+    <div class="ex-card">
+      <span class="lvl construit">Scénario C</span>
+      <h4>Version anglaise absente</h4>
+      <p>Un acte dont seule la colonne française est disponible sur la page reçue.</p>
+      <div class="but"><b>Point de vigilance</b>Renseigner le statut de la version anglaise comme « absente de la source », jamais laisser le champ vide sans explication.</div>
+    </div>
+    <div class="ex-card">
+      <span class="lvl construit">Scénario D</span>
+      <h4>Page sans couche texte</h4>
+      <p>Photographier ou scanner en image une page de texte quelconque (sans passer par un PDF avec OCR intégré).</p>
+      <div class="but"><b>Point de vigilance</b>La reconnaissance « sans réseau » échoue normalement ici — c'est l'occasion de basculer sur <b>Reconnaître par OCR</b> et de mesurer la différence de temps de traitement.</div>
+    </div>
+  </div>
+</section>
+
+<section id="memo">
+  <div class="section-head">
+    <div class="k">Référence rapide</div>
+    <h2>Aide-mémoire</h2>
+    <p>À garder sous la main pendant la formation et après — imprimable telle quelle.</p>
+  </div>
+
+  <h3 class="sub">Rôles</h3>
+  <div class="card-role"><span class="role">Stagiaire</span><p>Versement, Numériser et traiter, Saisie. Enregistre et envoie au contrôle — ne valide jamais soi-même.</p></div>
+  <div class="card-role"><span class="role">Opérateur</span><p>Mêmes accès que le stagiaire, plus Mesures et Données.</p></div>
+  <div class="card-role"><span class="role">Contrôleur qualité</span><p>Sous-rôle de l'opérateur : valide ou refuse (avec motif) les fiches envoyées au contrôle.</p></div>
+  <div class="card-role"><span class="role">Administrateur</span><p>Tous les accès, y compris Comptes et Commandes.</p></div>
+
+  <h3 class="sub">Le cycle en quatre étapes</h3>
+  <table class="ref">
+    <tr><th>Étape</th><th>Onglet</th><th>Ce qu'on y fait</th></tr>
+    <tr><td class="mono">1</td><td>Versement</td><td>Reprendre le lot numérisé, établir le bordereau</td></tr>
+    <tr><td class="mono">2</td><td>Numériser et traiter</td><td>Repérer automatiquement les actes de chaque page</td></tr>
+    <tr><td class="mono">3</td><td>Saisie</td><td>Corriger et compléter la fiche, envoyer au contrôle</td></tr>
+    <tr><td class="mono">4</td><td>Contrôle qualité →</td><td>Validation par le contrôleur ; la fiche rejoint alors le catalogue public</td></tr>
+  </table>
+
+  <h3 class="sub">Dépannage</h3>
+  <table class="ref">
+    <tr><th>Symptôme</th><th>Cause probable</th><th>Solution</th></tr>
+    <tr><td>« aucune couche texte exploitable » sur toutes les pages</td><td>Le PDF est un scan brut, sans reconnaissance de caractères faite par le logiciel du scanner</td><td>Utiliser <b>Reconnaître par OCR</b> à la place de la voie « sans réseau »</td></tr>
+    <tr><td>Le sélecteur de mode (assisté/manuel) semble ne rien faire</td><td>Confusion avec un badge d'état non cliquable dans une version antérieure — corrigé</td><td>Cliquer directement sur le bouton « validation assistée / saisie manuelle ⇄ »</td></tr>
+    <tr><td>La fiche de saisie s'ouvre vide en mode assisté</td><td>La proposition en tête de file ne contient aucun champ reconnaissable</td><td>Vérifier l'origine du fichier importé ; repasser par Numériser et traiter plutôt qu'un import JSON manuel</td></tr>
+    <tr><td>« Moteur OCR indisponible »</td><td>Page ouverte en double-clic (file://) plutôt que via un serveur local</td><td>Lancer <b>demarrer-atelier.bat</b> avant d'ouvrir l'atelier, ou utiliser le lien en ligne</td></tr>
+    <tr><td>L'assistant ne répond qu'en mode local, sans conversation naturelle</td><td>Aucune clé API Gemini configurée</td><td>Renseigner sa clé dans le panneau de l'onglet Assistant (gratuite sur aistudio.google.com/apikey)</td></tr>
+  </table>
+
+  <h3 class="sub">Zones ISAD(G) dans la fiche de saisie</h3>
+  <table class="ref">
+    <tr><th>Zone</th><th>Contenu</th></tr>
+    <tr><td class="mono">Zone 1</td><td>Identification — référence, intitulé, dates, niveau, producteur</td></tr>
+    <tr><td class="mono">Zone 2</td><td>Contexte — producteur, autorité signataire, historique de conservation</td></tr>
+    <tr><td class="mono">Zone 3</td><td>Contenu et structure — résumé analytique</td></tr>
+    <tr><td class="mono">Zone 4</td><td>Conditions d'accès et d'utilisation — délai de communicabilité</td></tr>
+    <tr><td class="mono">Zone 5</td><td>Sources complémentaires — abroge, modifie, vise</td></tr>
+    <tr><td class="mono">Zones 6-7</td><td>Notes et contrôle de la description — réserves, mode, horodatage</td></tr>
+  </table>
+</section>
+
+</main>
+
+<footer>Atelier du Journal officiel — Archives Nationales du Cameroun</footer>
