@@ -1,12 +1,23 @@
 # Archive — première version, sans serveur
 
-Les trois fichiers de ce dossier sont la toute première version de l'Atelier du
-Journal officiel : pensée pour un poste totalement isolé, sans réseau ni
-serveur — ouverture par simple double-clic sur `atelier-jo-hors-ligne.html`
-(ou via `demarrer-atelier.bat`, qui ne fait que servir ce fichier statique par
-un petit serveur Python local pour contourner les restrictions du navigateur
-en `file://`), avec `partager-sur-reseau-local.bat` pour l'exposer aux autres
-postes du même réseau.
+Les trois fichiers `.html`/`.bat` de ce dossier sont la toute première version
+de l'Atelier du Journal officiel : pensée pour un poste totalement isolé, sans
+réseau ni serveur — ouverture par simple double-clic sur
+`atelier-jo-hors-ligne.html` (ou via `demarrer-atelier.bat`, qui ne fait que
+servir ce fichier statique par un petit serveur Python local pour contourner
+les restrictions du navigateur en `file://`), avec
+`partager-sur-reseau-local.bat` pour l'exposer aux autres postes du même
+réseau.
+
+Les fichiers `pdf.min.js`, `pdf.worker.min.js`, `tesseract.min.js`,
+`tesseract-worker.min.js`, `tesseract-core.wasm.js`, `fra.traineddata.gz` et
+`eng.traineddata.gz` sont les bibliothèques de lecture PDF et d'OCR
+vendorisées dont `atelier-jo-hors-ligne.html` a besoin à côté de lui (chemins
+relatifs, sans repli réseau) — déplacées ici avec lui pour que ce dossier
+reste autonome. Ce sont des copies indépendantes de celles, plus récentes,
+vendorisées séparément dans `atelier-jo-api/public/` pour le frontend
+maintenu : les mettre à jour ici ne les met pas à jour là-bas, et
+inversement.
 
 ## Pourquoi archivés et non supprimés
 
