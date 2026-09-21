@@ -44,21 +44,23 @@ header{background:var(--card);border-bottom:1px solid var(--ruleS);position:stic
 .r2{max-width:1080px;margin:0 auto;padding:8px 22px 10px;display:flex;gap:2px;flex-wrap:wrap}
 .r2 button{font:inherit;font-size:14px;border:0;background:none;color:var(--ink2);padding:6px 12px;border-radius:5px;cursor:pointer}
 .r2 button:hover{background:var(--paper)}
-.r2 button[aria-current="true"]{background:var(--blueBg);color:var(--blue);font-weight:500}
+.r2 button[aria-current="true"]{background:none;color:var(--blue-ink);font-weight:500;box-shadow:inset 0 -2px 0 var(--blue-ink)}
 
 main{max-width:1080px;margin:0 auto;padding:24px 22px 90px}
 .card{background:var(--card);border:1px solid var(--ruleS);border-radius:2px;padding:20px 24px;margin-bottom:18px}
-.card h2{font-size:17px}
+.card h2{font-size:18px}
 .card p.sub{color:var(--ink2);font-size:13.5px;margin:5px 0 16px}
 .warn{background:var(--ochreBg);border:1px solid #E3D6AB;color:#5A4914;padding:10px 14px;border-radius:5px;font-size:13px;margin-bottom:18px}
 .empty{color:var(--ink3);font-size:14px;padding:26px 0;text-align:center}
 .hint{font-size:12.5px;color:var(--ink3);margin-top:6px}
 input,select,textarea{width:100%;font:inherit;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--rule);border-radius:4px;padding:7px 9px}
 textarea{resize:vertical;min-height:60px}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-offset:-1px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--blue-ink);outline-offset:-1px;background:var(--blueWash)}
+button:focus-visible{outline:2px solid var(--blue-ink);outline-offset:2px}
 button.b{font:inherit;font-size:14px;border-radius:5px;padding:9px 18px;cursor:pointer;border:1px solid var(--ruleS);background:#fff;color:var(--ink)}
 button.b:hover{border-color:var(--ink3)}
 button.b.pri{background:var(--blue-ink);border-color:var(--blue-ink);color:#fff}
+button.b.pri:hover{background:var(--blue-mid);border-color:var(--blue-mid)}
 button.b.urgent{background:var(--ochre);border-color:var(--ochre);color:#fff}
 button.b:disabled{opacity:.45;cursor:default}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
@@ -66,6 +68,7 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
 th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule)}
 th{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--blue-label);font-weight:400}
 td.num{font-family:var(--mono);text-align:right}
+table tr:nth-child(even){background:var(--blueWash)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .mono{font-family:var(--mono)}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
@@ -104,10 +107,10 @@ label.lb i{display:block;font-style:normal;font-size:11.5px;color:var(--ink3);li
 .clear{font:inherit;font-size:12.5px;background:none;border:0;color:var(--blue);cursor:pointer;padding:0 0 10px;text-decoration:underline}
 .rescount{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
 .hit{background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--ruleS);border-radius:2px;padding:14px 17px;margin-bottom:10px;cursor:pointer}
-.hit:hover{border-left-color:var(--blue)}
+.hit:hover{border-left-color:var(--blue-ink)}
 .hit .meta{font-family:var(--mono);font-size:11.5px;color:var(--ink3);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px}
 .hit .meta b{color:var(--ochre);font-weight:500}
-.hit h3{font-family:var(--serif);font-size:16px;line-height:1.4}
+.hit h3{font-family:var(--serif);font-size:15.5px;line-height:1.4}
 .hit p{margin:5px 0 0;font-size:14px;color:var(--ink2)}
 .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
 .chip{font-size:11.5px;background:var(--paper);border:1px solid var(--rule);color:var(--ink2);padding:2px 8px;border-radius:11px}
@@ -159,7 +162,7 @@ label.lb i{display:block;font-style:normal;font-size:11.5px;color:var(--ink3);li
 .step{display:grid;grid-template-columns:30px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:13px}
 .step .i{font-family:var(--mono);font-size:11px;color:var(--ink3)}
 .verdict{border-radius:5px;padding:13px 16px;font-size:14.5px;margin-top:13px}
-.verdict.ok{background:#EAF2EC;border:1px solid #BCD6C3;color:#255536}
+.verdict.ok{background:var(--greenBg);border:1px solid #BCD6C3;color:var(--green)}
 .verdict.ko{background:var(--redBg);border:1px solid #E3BEBE;color:var(--red)}
 .offers{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
 .offer,.pay{border:1px solid var(--rule);background:var(--card);border-radius:6px;padding:14px 16px;cursor:pointer}
@@ -2327,7 +2330,7 @@ function renderDonnees(){
     ${N.length?`<table><tr><th>Archiviste</th><th>Mode</th><th>Type</th><th>Intitulé</th><th>Statut</th><th>Durée</th><th></th></tr>
     ${N.map(n=>{
       const statut=n.statut==='a_valider'?`<span style="color:var(--ochre)">à valider</span>`
-        :n.statut==='validee'?`<span style="color:#255536">validée</span>`
+        :n.statut==='validee'?`<span style="color:var(--green)">validée</span>`
         :n.motif_controle?`<span style="color:var(--red)" title="${esc(n.motif_controle)}">brouillon — rejetée : ${esc(n.motif_controle.slice(0,40))}</span>`
         :`<span style="color:var(--ink3)">brouillon</span>`;
       const modifiable = n.statut!=='validee' && (admin||mien(n));
@@ -3851,7 +3854,7 @@ function renderMesCommandes(){
   app.innerHTML=mine.map(c=>{
     const actes=c.actes_ids.map(id=>L.find(n=>n.id===id)).filter(Boolean);
     const lib=c.statut==='validee'?'Validée — document disponible':c.statut==='refusee'?'Refusée':'En attente de validation par le directeur';
-    const couleur=c.statut==='validee'?'#255536':c.statut==='refusee'?'var(--red)':'var(--ochre)';
+    const couleur=c.statut==='validee'?'var(--green)':c.statut==='refusee'?'var(--red)':'var(--ochre)';
     const montant=(OFFRES[c.offre]?OFFRES[c.offre].p:0)*c.actes_ids.length;
     return `<div class="card"><h2>Commande n° ${c.id}</h2>
       <p class="sub">${esc(dfr(c.cree_le.slice(0,10)))} · ${esc((OFFRES[c.offre]||{}).t||c.offre)} · ${fcfa(montant)}</p>
