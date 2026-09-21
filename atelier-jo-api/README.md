@@ -41,6 +41,36 @@ autres postes du réseau local s'y connectent via l'adresse IP de la machine
 qui l'héberge, ex. `http://192.168.1.42:3000`. Pour trouver cette adresse :
 `ipconfig` (Windows) ou `ip addr` (Linux).
 
+## Démarrage sur poste Windows
+
+`demarrer-serveur.bat`, dans ce dossier, joue pour ce serveur le rôle que
+jouait `demarrer-atelier.bat` pour l'ancienne version hors ligne : double-clic,
+message clair si Node.js n'est pas installé (avec le lien pour l'installer),
+installation des dépendances au premier lancement si besoin, message clair si
+`.env` n'a pas encore été préparé (voir « Mise en route » ci-dessus — ce
+fichier contient la clé de session, il ne se génère pas tout seul), puis
+démarrage du serveur sans jamais fermer la fenêtre pendant qu'il tourne.
+
+Pour un poste qui doit rester serveur en continu (allumé en permanence,
+accessible aux autres postes du réseau local), le faire démarrer tout seul à
+l'allumage :
+
+1. Ouvrir le dossier de démarrage de Windows : touche <kbd>Windows</kbd> + <kbd>R</kbd>,
+   taper `shell:startup`, Entrée. (Pour que ça démarre même sans session
+   ouverte sur ce compte, utiliser plutôt `shell:common startup` — droits
+   administrateur requis pour y écrire.)
+2. Dans ce dossier, créer un raccourci vers `demarrer-serveur.bat` (clic droit
+   sur le fichier → Envoyer vers → Bureau, créer un raccourci, puis déplacer ce
+   raccourci dans le dossier de démarrage — ou glisser-déposer directement en
+   maintenant <kbd>Alt</kbd> pour forcer la création d'un raccourci plutôt
+   qu'un déplacement).
+3. Redémarrer le poste pour vérifier : une fenêtre de terminal doit s'ouvrir
+   toute seule et le navigateur doit afficher le catalogue.
+
+Le compte administrateur (voir « Mise en route ») doit avoir été créé au moins
+une fois avant de compter sur ce démarrage automatique — ce n'est pas une
+étape que `demarrer-serveur.bat` refait ou vérifie à chaque lancement.
+
 ## Ce qui reste à faire
 
 Le patron (routes + middleware `authentifier`/`autoriser`) est posé avec
