@@ -10,8 +10,8 @@ app.use(cookieParser());
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/notices', require('./routes/notices.routes'));
 app.use('/api/comptes', require('./routes/comptes.routes'));
+app.use('/api/versements', require('./routes/versements.routes'));
 // TODO, même patron que notices.routes.js :
-//   app.use('/api/versements', require('./routes/versements.routes'));
 //   app.use('/api/commandes',  require('./routes/commandes.routes'));
 
 // Sert atelier-jo-complet.html (à placer dans public/) sur la même origine

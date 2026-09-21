@@ -50,6 +50,23 @@ CREATE TABLE IF NOT EXISTS notices (
 
 CREATE INDEX IF NOT EXISTS idx_notices_statut ON notices(statut);
 CREATE INDEX IF NOT EXISTS idx_notices_auteur ON notices(auteur_id);
+
+CREATE TABLE IF NOT EXISTS versements (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  cree_par       INTEGER REFERENCES comptes(id),
+  operateur      TEXT,
+  materiel       TEXT,
+  serie          TEXT,
+  numero_jo      TEXT,
+  cote           TEXT,
+  prescriptions  TEXT,                    -- JSON
+  bordereau_pdf  TEXT,                    -- JSON {nom,taille,dataUrl} ou NULL
+  lot            TEXT,                    -- JSON : métadonnées des fichiers du lot (rang/nom/taille/empreinte), jamais leur contenu binaire
+  cree_le        TEXT NOT NULL DEFAULT (datetime('now')),
+  modifie_le     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_versements_cree_par ON versements(cree_par);
 `);
 
 module.exports = db;
