@@ -482,10 +482,85 @@ document.addEventListener('click',()=>{ if(MENU_PRO){ MENU_PRO=false; majNavAuth
 document.querySelectorAll('[data-l]').forEach(b=> b.onclick=()=>{ LANG=b.dataset.l; sync(); });
 function majAuthUI(){
   const el=document.getElementById('compte'); if(!el) return;
-  if(!UTILISATEUR){ el.innerHTML=''; return; }
+  if(!UTILISATEUR){
+    // Réservé au parcours de commande — la consultation du catalogue reste et doit rester libre,
+    // sans compte ni connexion, quel que soit l'état de ce lien.
+    el.innerHTML = ESPACE==='opac' ? `<button id="pubLogin" style="font:inherit;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">${t('Se connecter','Log in')}</button>
+      <span style="color:var(--ink3)">·</span>
+      <button id="pubInscr" style="font:inherit;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">${t('Créer un compte','Create an account')}</button>` : '';
+    const pl=document.getElementById('pubLogin'); if(pl) pl.onclick=()=>{ PUBLIC_AUTH='login'; sync(); scrollTo(0,0); };
+    const pi=document.getElementById('pubInscr'); if(pi) pi.onclick=()=>{ PUBLIC_AUTH='inscription'; sync(); scrollTo(0,0); };
+    return;
+  }
   const lib=(ROLES.find(r=>r[0]===UTILISATEUR.role)||[,UTILISATEUR.role])[1];
   el.innerHTML=`${esc(UTILISATEUR.nomComplet||UTILISATEUR.nom)} · <span>${esc(tDict(lib))}</span> <button id="deco" style="font:inherit;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0;margin-left:6px">${t('Se déconnecter','Log out')}</button>`;
   document.getElementById('deco').onclick=logout;
+}
+// Écran de connexion/inscription du catalogue public — réservé au parcours de commande (Commander,
+// Mes commandes) : jamais un préalable pour rechercher ou lire une notice validée.
+let PUBLIC_AUTH=null; // 'login' | 'inscription' | null
+function renderAuthPublic(){
+  const mode = PUBLIC_AUTH==='inscription' ? 'inscription' : 'login';
+  app.innerHTML = mode==='login' ? `
+  <button class="back" id="bkAuth">← ${t('Retour au catalogue public','Back to the public catalogue')}</button>
+  <div class="card" style="max-width:420px;margin:16px auto 40px"><h2>Connexion</h2>
+    <p class="sub">Pour commander le texte intégral d'un acte, ou suivre vos commandes.</p>
+    <div class="row"><label class="lb">Email</label><div><input id="pl-email" type="email" autocomplete="username"></div></div>
+    <div class="row"><label class="lb">Mot de passe</label><div><input id="pl-mdp" type="password" autocomplete="current-password"></div></div>
+    <div id="pl-err" class="hint" style="color:var(--red)"></div>
+    <div class="actions"><button class="b pri" id="pl-go">Se connecter</button></div>
+    <p class="hint" style="margin-top:14px">Pas encore de compte ? <button id="pl-vers-inscr" style="font:inherit;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">Créer un compte</button></p>
+  </div>`
+  : `
+  <button class="back" id="bkAuth">← ${t('Retour au catalogue public','Back to the public catalogue')}</button>
+  <div class="card" style="max-width:460px;margin:16px auto 40px"><h2>Créer un compte</h2>
+    <p class="sub">Réservé à la commande depuis le catalogue public. La recherche et la lecture des notices restent libres sans compte : celui-ci ne sert qu'à suivre vos commandes.</p>
+    <div class="row"><label class="lb">Nom complet</label><div><input id="pi-nom" autocomplete="name"></div></div>
+    <div class="row"><label class="lb">Email</label><div><input id="pi-email" type="email" autocomplete="username"></div></div>
+    <div class="row"><label class="lb">Mot de passe</label><div><input id="pi-mdp" type="password" autocomplete="new-password"></div></div>
+    <div id="pi-err" class="hint" style="color:var(--red)"></div>
+    <div class="actions"><button class="b pri" id="pi-go">Créer mon compte</button></div>
+    <p class="hint" style="margin-top:14px">Déjà inscrit ? <button id="pi-vers-login" style="font:inherit;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">Se connecter</button></p>
+  </div>`;
+
+  document.getElementById('bkAuth').onclick=()=>{ PUBLIC_AUTH=null; sync(); scrollTo(0,0); };
+  if(mode==='login'){
+    const go=async()=>{
+      const email=document.getElementById('pl-email').value.trim(), mot_de_passe=document.getElementById('pl-mdp').value;
+      const err=document.getElementById('pl-err'); err.textContent='';
+      if(!email||!mot_de_passe){ err.textContent='Email et mot de passe requis.'; return; }
+      let r,data;
+      try{
+        r=await fetch('/api/auth/connexion',{method:'POST',credentials:'include',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mot_de_passe})});
+        data=await r.json();
+      }catch(e){ err.textContent="Impossible de joindre le serveur."; return; }
+      if(!r.ok){ err.textContent=data.erreur||'Connexion refusée.'; return; }
+      UTILISATEUR=data; await saveSession(); PUBLIC_AUTH=null; sync();
+    };
+    document.getElementById('pl-go').onclick=go;
+    document.getElementById('pl-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
+    document.getElementById('pl-vers-inscr').onclick=()=>{ PUBLIC_AUTH='inscription'; sync(); };
+    document.getElementById('pl-email').focus();
+  } else {
+    const go=async()=>{
+      const nom=document.getElementById('pi-nom').value.trim(), email=document.getElementById('pi-email').value.trim(), mot_de_passe=document.getElementById('pi-mdp').value;
+      const err=document.getElementById('pi-err'); err.textContent='';
+      if(!nom||!email||!mot_de_passe){ err.textContent='Tous les champs sont requis.'; return; }
+      let r,data;
+      try{
+        r=await fetch('/api/auth/inscription',{method:'POST',credentials:'include',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify({nom,email,mot_de_passe})});
+        data=await r.json();
+      }catch(e){ err.textContent="Impossible de joindre le serveur."; return; }
+      if(!r.ok){ err.textContent=data.erreur||'Inscription refusée.'; return; }
+      UTILISATEUR=data; await saveSession(); PUBLIC_AUTH=null; sync();
+    };
+    document.getElementById('pi-go').onclick=go;
+    document.getElementById('pi-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
+    document.getElementById('pi-vers-login').onclick=()=>{ PUBLIC_AUTH='login'; sync(); };
+    document.getElementById('pi-nom').focus();
+  }
 }
 function sync(){
   document.querySelectorAll('[data-e]').forEach(b=> b.setAttribute('aria-pressed', b.dataset.e===ESPACE));
@@ -517,10 +592,11 @@ function sync(){
   document.getElementById('tabs').innerHTML=onglets.map(([k,l])=>{
     const b = (k==='saisie'&&DB.queue.length) ? ` <b style="font-family:var(--mono);font-size:11px;background:var(--ochre);color:#fff;border-radius:9px;padding:1px 7px;margin-left:5px;font-weight:500">${DB.queue.length}</b>` : '';
     return `<button data-v="${k}" aria-current="${VUE===k}">${l}${b}</button>`;}).join('');
-  document.querySelectorAll('#tabs button').forEach(b=> b.onclick=()=>{ VUE=b.dataset.v; ouvert=null; sync(); });
+  document.querySelectorAll('#tabs button').forEach(b=> b.onclick=()=>{ VUE=b.dataset.v; ouvert=null; PUBLIC_AUTH=null; sync(); });
   document.getElementById('who').textContent = DB.config ? DB.config.annotateur+' · '+DB.config.mode
     : (ESPACE==='admin' ? NOTICES_ADMIN.length : NOTICES_OPAC.length)+' notice(s)';
-  ({versement:renderVersement,tele:renderTele,saisie:renderSaisie,controle:renderControle,mesures:renderMesures,donnees:renderDonnees,commandes:renderCommandes,
+  if(ESPACE==='opac' && PUBLIC_AUTH && !UTILISATEUR) renderAuthPublic();
+  else ({versement:renderVersement,tele:renderTele,saisie:renderSaisie,controle:renderControle,mesures:renderMesures,donnees:renderDonnees,commandes:renderCommandes,
     accueil:renderAccueil,rech:renderRech,classement:renderClassement,instr:renderInstr,chrono:renderChrono,thes:renderThes,assist:renderAssistant,
     integ:renderInteg,normes:renderNormes,cmd:renderCmd,mescommandes:renderMesCommandes})[VUE]();
   traduireDOM();
