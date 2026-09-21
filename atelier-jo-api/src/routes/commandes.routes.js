@@ -6,8 +6,14 @@ const router = express.Router();
 
 // L'identité de l'acheteur n'est jamais dupliquée dans commandes : une seule
 // jointure sur comptes au moment de l'affichage, jamais désynchronisée.
+// Même principe pour validateur_id : le nom de l'admin qui a validé/refusé
+// n'est joint qu'ici, pour le tampon du document certifié côté client — sans
+// ça, le frontend n'a aucun moyen de savoir qui a approuvé une commande.
 function versVue(ligne) {
   const compte = db.prepare('SELECT nom, email FROM comptes WHERE id = ?').get(ligne.compte_id);
+  const validateur = ligne.validateur_id
+    ? db.prepare('SELECT nom FROM comptes WHERE id = ?').get(ligne.validateur_id)
+    : null;
   return {
     id: ligne.id,
     compte_id: ligne.compte_id,
@@ -18,6 +24,7 @@ function versVue(ligne) {
     statut: ligne.statut,
     motif_refus: ligne.motif_refus,
     validateur_id: ligne.validateur_id,
+    validateur_nom: validateur ? validateur.nom : null,
     date_validation: ligne.date_validation,
     cree_le: ligne.cree_le,
     modifie_le: ligne.modifie_le,

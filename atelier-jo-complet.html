@@ -1297,9 +1297,10 @@ function renderVersement(){
     VUE='tele'; sync(); scrollTo(0,0); };
 }
 // Enregistre la reprise du lot côté serveur (POST /api/versements) au moment où le bordereau est
-// établi — c'est le geste qui formalise le versement, cohérent avec le document téléchargé juste
-// après. Ne bloque jamais le téléchargement du bordereau en cas d'erreur réseau ponctuelle : à
-// défaut d'enregistrement serveur, le document reste la seule trace, comme avant l'API.
+// établi. Le bouton n'appelle bordereau() (téléchargement) qu'après le succès de cet appel — voir
+// son gestionnaire ci-dessus : si le serveur refuse (bordereau surdimensionné, indisponibilité...),
+// l'erreur est affichée et AUCUN document n'est téléchargé, par cohérence avec payer()/commandes —
+// un opérateur ne doit jamais repartir avec un bordereau papier que le serveur n'a pas enregistré.
 async function enregistrerVersement(){
   await api('/api/versements', {method:'POST', body:JSON.stringify({
     operateur:LOT_META.operateur, materiel:LOT_META.materiel, serie:LOT_META.serie,
@@ -2353,11 +2354,9 @@ const LOGO_ANC='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANAAAAA2CAYAAAC2uR
 function estAcquis(id,offre){
   return MES_COMMANDES.some(c=>c.statut==='validee'&&c.offre===offre&&c.actes_ids.includes(id));
 }
-// Cherche la commande validée la plus récente qui couvre cet acte, pour dater le tampon du document
-// certifié téléchargé. Le nom du validateur (l'admin qui a approuvé) n'est PAS disponible ici :
-// GET /api/commandes(/mes-commandes) ne joint que l'identité de l'acheteur, pas celle du
-// validateur (validateur_id reste un simple nombre) — voir le résumé de fin d'étape 4d. Le tampon
-// utilise donc une mention institutionnelle générique plutôt qu'un nom personnel, en attendant.
+// Cherche la commande validée la plus récente qui couvre cet acte, pour nommer et dater le tampon
+// du document certifié téléchargé — validateur_nom vient d'une jointure sur validateur_id côté
+// serveur (commandes.routes.js), ajoutée après coup pour cet usage précis.
 function commandeValidantActe(id,offre){
   return MES_COMMANDES.filter(c=>c.statut==='validee'&&c.offre===offre&&c.actes_ids.includes(id))
     .sort((a,b)=>(b.date_validation||'').localeCompare(a.date_validation||''))[0];
@@ -2837,12 +2836,12 @@ function renderFiche(n){
   if(ac) ac.onclick=()=>{ OFFRE='texte'; PANIER=new Set([n.id]); ETAPE='choix'; PROG=[]; VUE='cmd'; sync(); scrollTo(0,0); };
   const dt=document.getElementById('dltxt');
   if(dt) dt.onclick=()=>{ const cv=commandeValidantActe(n.id,'texte');
-    documentTexte([n], n.numero||n.id, 'Texte intégral certifié — '+(n.numero||n.reference), cv?'Archives Nationales du Cameroun':null, cv&&cv.date_validation); };
+    documentTexte([n], n.numero||n.id, 'Texte intégral certifié — '+(n.numero||n.reference), cv&&cv.validateur_nom, cv&&cv.date_validation); };
   const asc=document.getElementById('acheterScan');
   if(asc) asc.onclick=()=>{ OFFRE='scan'; PANIER=new Set([n.id]); ETAPE='choix'; PROG=[]; VUE='cmd'; sync(); scrollTo(0,0); };
   const dsc=document.getElementById('dlscan');
   if(dsc) dsc.onclick=()=>{ const cv=commandeValidantActe(n.id,'scan');
-    documentScan([n], n.numero||n.id, 'Scan certifié — '+(n.numero||n.reference), cv?'Archives Nationales du Cameroun':null, cv&&cv.date_validation); };
+    documentScan([n], n.numero||n.id, 'Scan certifié — '+(n.numero||n.reference), cv&&cv.validateur_nom, cv&&cv.date_validation); };
 }
 
 // ══════════════════════════════════════════════════ PLAN DE CLASSEMENT (ISAD multi-niveaux)
@@ -3830,8 +3829,8 @@ function renderMesCommandes(){
     const c=mine.find(x=>String(x.id)===b.dataset.dlc); if(!c) return;
     const actes=c.actes_ids.map(id=>L.find(n=>n.id===id)).filter(Boolean);
     const ref='CMD'+c.id;
-    if(c.offre==='scan') documentScan(actes, ref, 'Scan(s) original(aux) certifié(s) — commande n° '+c.id, 'Archives Nationales du Cameroun', c.date_validation);
-    else documentTexte(actes, ref, 'Texte(s) intégral(aux) certifié(s) — commande n° '+c.id, 'Archives Nationales du Cameroun', c.date_validation);
+    if(c.offre==='scan') documentScan(actes, ref, 'Scan(s) original(aux) certifié(s) — commande n° '+c.id, c.validateur_nom, c.date_validation);
+    else documentTexte(actes, ref, 'Texte(s) intégral(aux) certifié(s) — commande n° '+c.id, c.validateur_nom, c.date_validation);
   });
   document.querySelectorAll('[data-refaire]').forEach(b=>b.onclick=()=>{
     const c=mine.find(x=>String(x.id)===b.dataset.refaire); if(!c) return;
