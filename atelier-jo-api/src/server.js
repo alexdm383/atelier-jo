@@ -94,6 +94,20 @@ synchroniserFrontend();
   }
 });
 
+// Même principe pour l'OCR (voir README.md) : tesseract.min.js a un repli CDN comme pdf.min.js,
+// mais le worker, le composant WebAssembly et les données de langue fra+eng sont vérifiés
+// séparément par le frontend lui-même à l'exécution (fichiersOcrLocauxDisponibles()) — avertir
+// ici seulement sur leur absence au démarrage, pour que ce ne soit jamais découvert en silence.
+['tesseract.min.js', 'tesseract-worker.min.js', 'tesseract-core.wasm.js', 'fra.traineddata.gz', 'eng.traineddata.gz'].forEach((nom) => {
+  if (!fs.existsSync(path.join(PUBLIC_DIR, nom))) {
+    console.warn(
+      `ATTENTION : public/${nom} est absent. La reconnaissance OCR dépendra d'un CDN externe (et de ` +
+      'ses propres à-coups) à chaque utilisation, silencieusement pour l\'utilisateur, avec un message ' +
+      "d'erreur seulement si ce CDN est injoignable. Voir README.md pour vendoriser ce fichier."
+    );
+  }
+});
+
 app.use(express.static(PUBLIC_DIR));
 
 const PORT = process.env.PORT || 3000;

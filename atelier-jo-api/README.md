@@ -58,6 +58,36 @@ fichiers est absent de `public/` (voir `server.js`) plutôt que de laisser
 fichiers dans `public/`, et la ligne `pdf.js/3.11.174/` dans
 `atelier-jo-complet.html` (script et repli CDN).
 
+## Moteur OCR (Tesseract.js) vendorisé
+
+Même principe que pour pdf.js, mais en deux temps :
+
+- `public/tesseract.min.js` (Tesseract.js 5.1.1) est commité et chargé en local
+  d'abord, avec un repli vers le CDN cdnjs si absent — exactement le même patron
+  de balise `<script>` que `pdf.min.js`.
+- Le worker (`public/tesseract-worker.min.js`), le composant WebAssembly
+  (`public/tesseract-core.wasm.js`) et les données de langue français+anglais
+  (`public/fra.traineddata.gz`, `public/eng.traineddata.gz`) sont des fichiers
+  séparés, demandés seulement au premier lancement d'une reconnaissance OCR — pas
+  au chargement de la page. `atelier-jo-complet.html` vérifie leur présence
+  locale par une requête `HEAD` avant de les utiliser
+  (`fichiersOcrLocauxDisponibles()`) ; s'ils manquent, Tesseract.js retombe sur
+  son propre CDN par défaut (jsdelivr) pour ces fichiers précis — un repli déjà
+  intégré à la bibliothèque, pas construit ici.
+
+**Limite connue** : contrairement à `pdf.min.js`, il n'y a pas de bascule
+automatique fichier-par-fichier vers un CDN si un seul des cinq fichiers
+Tesseract venait à manquer alors que les autres sont présents — un scénario
+improbable puisqu'ils sont vendorisés ensemble, mais possible (suppression
+manuelle partielle, erreur de déploiement). Dans ce cas, l'échec remonte un
+message clair invitant à utiliser « Reconnaître le texte — sans réseau » à la
+place, plutôt qu'une erreur JavaScript brute — mais l'OCR reste indisponible
+tant que les cinq fichiers ne sont pas tous réunis. Documenté ici plutôt que
+laissé sans mention.
+
+Le serveur avertit clairement au démarrage si l'un de ces cinq fichiers est
+absent de `public/` (voir `server.js`).
+
 ## Démarrage sur poste Windows
 
 `demarrer-serveur.bat`, dans ce dossier, joue pour ce serveur le rôle que

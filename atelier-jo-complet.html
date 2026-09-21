@@ -5,7 +5,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="pdf.min.js" onerror="this.onerror=null;document.write('\x3Cscript src=\x22https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js\x22\x3E\x3C/script\x3E')"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+<script>window.TESSERACT_LOCAL=true;</script>
+<script src="tesseract.min.js" onerror="this.onerror=null;window.TESSERACT_LOCAL=false;document.write('\x3Cscript src=\x22https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js\x22\x3E\x3C/script\x3E')"></script>
 
 <style>
 :root{--paper:#F3F4F0;--card:#FFF;--ink:#1B2025;--ink2:#525C66;--ink3:#8A939C;
@@ -1664,21 +1665,35 @@ async function reconnaitreLocal(fichiers,garderJournal){
 let TEXTECOLLE='';
 
 // ══════════════════════════════════════════════════ RECONNAISSANCE PAR OCR (sans réseau) — repli pour les scans sans couche texte
-let OCR_WORKER=null;
+// tesseract.min.js lui-même a un repli CDN au chargement de la page (voir la balise <script>,
+// même patron que pdf.min.js) ; mais le worker, le composant WebAssembly et les données de langue
+// fra+eng sont des fichiers séparés, chargés seulement au premier lancement d'un OCR. On vérifie
+// ici qu'ils sont bien joignables EN LOCAL (fichiers vendorisés dans public/) avant de les
+// demander : sinon, Tesseract.js retombe tout seul sur son propre CDN par défaut (jsdelivr) pour
+// ces fichiers-là — un repli qui existe déjà côté bibliothèque, pas construit ici.
+let OCR_WORKER=null, OCR_LOCAL_VERIFIE=null;
+async function fichiersOcrLocauxDisponibles(){
+  if(OCR_LOCAL_VERIFIE!==null) return OCR_LOCAL_VERIFIE;
+  if(!window.TESSERACT_LOCAL){ OCR_LOCAL_VERIFIE=false; return false; }
+  try{ const r=await fetch('tesseract-worker.min.js',{method:'HEAD'}); OCR_LOCAL_VERIFIE=r.ok; }
+  catch(e){ OCR_LOCAL_VERIFIE=false; }
+  return OCR_LOCAL_VERIFIE;
+}
 async function ocrWorker(){
   if(OCR_WORKER) return OCR_WORKER;
-  if(!window.Tesseract) throw new Error("tesseract.min.js absent du dossier");
-  const opts = window.OCR_LOCAL ? {workerPath:'tesseract-worker.min.js',corePath:'tesseract-core.wasm.js',langPath:'.'} : {};
+  // Message clair et actionnable dans tous les cas, plutôt qu'une erreur JavaScript brute : un
+  // agent en formation doit comprendre quoi faire, pas lire une pile d'appels.
+  const messageIndisponible="Le moteur de reconnaissance OCR est momentanément indisponible (fichiers locaux absents et connexion insuffisante pour les récupérer en ligne). Si le PDF possède déjà une couche texte, utilisez plutôt « Reconnaître le texte — sans réseau », qui ne dépend d'aucun réseau.";
+  if(location.protocol==='file:'){
+    throw new Error("le navigateur refuse de charger le moteur OCR parce que la page est ouverte directement depuis le disque, sans passer par le serveur. Lancez atelier-jo-api/demarrer-serveur.bat, puis ouvrez l'atelier depuis l'adresse qu'il affiche : l'OCR fonctionnera.");
+  }
+  if(!window.Tesseract) throw new Error(messageIndisponible);
+  const local = await fichiersOcrLocauxDisponibles();
+  const opts = local ? {workerPath:'tesseract-worker.min.js',corePath:'tesseract-core.wasm.js',langPath:'.'} : {};
   try{
     OCR_WORKER = await Tesseract.createWorker('fra+eng', 1, opts);
   }catch(e){
-    // Sous file:// (ouverture par double-clic), le navigateur refuse de charger le worker OCR — l'erreur
-    // renvoyée n'est parfois même pas un objet Error (juste une chaîne), d'où le besoin de la retraiter ici.
-    const brut=String((e&&e.message)||e||'');
-    if(location.protocol==='file:'){
-      throw new Error("le navigateur refuse de charger le moteur OCR parce que la page est ouverte directement depuis le disque, sans passer par le serveur. Lancez atelier-jo-api/demarrer-serveur.bat, puis ouvrez l'atelier depuis l'adresse qu'il affiche : l'OCR fonctionnera.");
-    }
-    throw new Error(brut||'échec du chargement du moteur OCR');
+    throw new Error(messageIndisponible);
   }
   return OCR_WORKER;
 }
