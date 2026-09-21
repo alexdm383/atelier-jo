@@ -1,0 +1,22 @@
+{
+  "name": "atelier-jo-api",
+  "version": "1.0.0",
+  "description": "Back-end de l'Atelier du Journal officiel — authentification et autorisation réelles",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "creer-admin": "node scripts/creer-admin.js",
+    "migrer-json": "node scripts/migrer-json.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^13.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3"
+  }
+}
