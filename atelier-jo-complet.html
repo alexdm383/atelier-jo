@@ -339,6 +339,24 @@ async function chargerNotices(){
 // jamais davantage que ce que le serveur garantit déjà pour un appel non authentifié.
 const OPAC=()=>NOTICES_OPAC.filter(n=>!n.statut||n.statut==='validee').map(vue);
 
+// Notices vues par l'espace Administration — ici AVEC credentials:'include', donc tout ce que
+// le rôle de l'agent lui donne le droit de voir (brouillons compris), à la différence du cache
+// public ci-dessus. Rechargé une fois à l'entrée dans l'espace, puis après chaque mutation.
+let NOTICES_ADMIN=[], ADMIN_CHARGE=false;
+async function chargerNoticesAdmin(){
+  try{ const r=await fetch('/api/notices',{credentials:'include'}); if(r.ok) NOTICES_ADMIN=await r.json(); }
+  catch(e){}
+}
+// Centralise l'appel à l'API notices : ajoute les identifiants de session, lit un message
+// d'erreur lisible renvoyé par le serveur au lieu de se fier au seul masquage des boutons côté
+// client (un rôle qui n'a pas le droit reçoit un message clair, pas un plantage silencieux).
+async function apiNotices(chemin, options){
+  const r=await fetch(chemin, {credentials:'include', headers:{'Content-Type':'application/json'}, ...(options||{})});
+  let data=null; try{ data=await r.json(); }catch(e){}
+  if(!r.ok) throw new Error((data&&data.erreur) || `Erreur ${r.status}`);
+  return data;
+}
+
 // ══════════════════════════════════════════════════ STOCKAGE
 async function load(){ try{ const r=await window.storage.get(KEY); if(r&&r.value) DB=JSON.parse(r.value); if(!DB.queue) DB.queue=[]; if(!DB.achats) DB.achats=[]; if(!DB.achatsScan) DB.achatsScan=[]; if(!DB.commandes) DB.commandes=[]; }
   catch(e){ if(!window.storage) memoryOnly=true; } }
@@ -491,6 +509,7 @@ function sync(){
   // encore vide plutôt que d'attendre le réseau, puis se redessine dès que la réponse arrive —
   // la consultation publique ne doit jamais rester bloquée en attente d'une session.
   if(ESPACE==='opac' && !OPAC_CHARGE){ OPAC_CHARGE=true; chargerNotices().then(sync); }
+  if(ESPACE==='admin' && !ADMIN_CHARGE){ ADMIN_CHARGE=true; chargerNoticesAdmin().then(sync); }
 
   const onglets = ESPACE==='admin' ? TABS.admin.filter(([k])=>PERMISSIONS[UTILISATEUR.role].includes(k))
     : TABS.opac.filter(([k])=> k!=='mescommandes' || (UTILISATEUR&&UTILISATEUR.role===ROLE_PUBLIC));
@@ -499,7 +518,8 @@ function sync(){
     const b = (k==='saisie'&&DB.queue.length) ? ` <b style="font-family:var(--mono);font-size:11px;background:var(--ochre);color:#fff;border-radius:9px;padding:1px 7px;margin-left:5px;font-weight:500">${DB.queue.length}</b>` : '';
     return `<button data-v="${k}" aria-current="${VUE===k}">${l}${b}</button>`;}).join('');
   document.querySelectorAll('#tabs button').forEach(b=> b.onclick=()=>{ VUE=b.dataset.v; ouvert=null; sync(); });
-  document.getElementById('who').textContent = DB.config ? DB.config.annotateur+' · '+DB.config.mode : DB.notices.length+' notice(s)';
+  document.getElementById('who').textContent = DB.config ? DB.config.annotateur+' · '+DB.config.mode
+    : (ESPACE==='admin' ? NOTICES_ADMIN.length : NOTICES_OPAC.length)+' notice(s)';
   ({versement:renderVersement,tele:renderTele,saisie:renderSaisie,controle:renderControle,mesures:renderMesures,donnees:renderDonnees,commandes:renderCommandes,
     accueil:renderAccueil,rech:renderRech,classement:renderClassement,instr:renderInstr,chrono:renderChrono,thes:renderThes,assist:renderAssistant,
     integ:renderInteg,normes:renderNormes,cmd:renderCmd,mescommandes:renderMesCommandes})[VUE]();
@@ -1886,7 +1906,7 @@ function ouvrirModif(id){ EDIT_NOTICE_ID=id; VUE='saisie'; sync(); scrollTo(0,0)
 function renderSaisie(){
   if(!DB.config) return renderConfig();
   const c=DB.config, ass=c.mode==='assisté';
-  const enModif = EDIT_NOTICE_ID && DB.notices.find(n=>n.id===EDIT_NOTICE_ID);
+  const enModif = EDIT_NOTICE_ID && NOTICES_ADMIN.find(n=>n.id===EDIT_NOTICE_ID);
   let rows='';
   for(const f of FIELDS){
     if(f[0]==='g'){ rows+=`<div class="grp-t">${esc(f[1])}</div>`; continue; }
@@ -1909,7 +1929,7 @@ function renderSaisie(){
   const proposVide = ass && DB.queue.length && !FIDS.some(k=>DB.queue[0][k]);
   app.innerHTML=`
   ${enModif?`<div class="card" style="border-left:3px solid var(--ochre)"><h2>Modification d'une fiche existante</h2>
-    ${enModif.motifControle?`<p class="sub" style="color:var(--red)">Cette fiche a été rejetée par le contrôle qualité. Motif : <b>${esc(enModif.motifControle)}</b></p>`:''}
+    ${enModif.motif_controle?`<p class="sub" style="color:var(--red)">Cette fiche a été rejetée par le contrôle qualité. Motif : <b>${esc(enModif.motif_controle)}</b></p>`:''}
     <p class="sub" style="margin-bottom:0">Corrigez la fiche ci-dessous puis soumettez-la à nouveau. <button id="annulerModif" style="font:inherit;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">Annuler la modification et revenir à une fiche vierge</button></p></div>`:''}
   ${ass&&!enModif?`<div class="card"><h2>2 — Propositions à valider</h2>
     <p class="sub">${DB.queue.length?`${DB.queue.length} proposition(s) en attente, issues de l'onglet « Numériser et traiter ». La fiche ci-dessous est déjà pré-remplie ; elles défilent une par une à chaque enregistrement.`:'La file est vide. Pour obtenir des propositions à partir d\'un PDF, passez par l\'onglet « Numériser et traiter » : c\'est la voie normale, celle-ci ne sert qu\'à importer un lot déjà préparé (voir ci-dessous).'}</p>
@@ -1928,7 +1948,7 @@ function renderSaisie(){
       <button class="b" id="svb">Enregistrer comme brouillon</button>
       <button class="b pri" id="sv">Soumettre pour validation</button>
       ${enModif?'':'<button class="b" id="sk">Écarter</button>'}<button class="b" id="cf">Changer de séance</button>
-      <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink3)">${DB.notices.length} notice(s) au catalogue</span></div>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink3)">${NOTICES_ADMIN.length} notice(s) au catalogue</span></div>
   </div>`;
   propose=null;
   document.getElementById('cf').onclick=()=>{DB.config=null;save();renderConfig()};
@@ -2002,26 +2022,33 @@ async function enregistrer(soumettre){
   const d=tStop(), c=DB.config, v={};
   FIDS.forEach(id=> v[id]=document.getElementById('f-'+id).value.trim());
   if(!v.type&&!v.intitule){ if(!confirm("Ni type ni intitulé renseignés. Enregistrer ?")){tResume();return} }
-  const trace={nom:(UTILISATEUR&&(UTILISATEUR.nomComplet||UTILISATEUR.nom))||c.annotateur,role:UTILISATEUR&&UTILISATEUR.role||'','date':new Date().toISOString()};
-  const existante = EDIT_NOTICE_ID && DB.notices.find(n=>n.id===EDIT_NOTICE_ID);
-  if(existante){
-    Object.assign(existante,v,{duree_s:(existante.duree_s||0)+d,
-      statut:soumettre?'a_valider':'brouillon',modifiePar:trace,
-      dateSoumission:soumettre?new Date().toISOString():existante.dateSoumission,
-      // Le motif et le nom du contrôleur ne sont effacés qu'à la resoumission effective : tant que la
-      // fiche reste en brouillon, l'auteur doit continuer à voir pourquoi elle a été rejetée.
-      motifControle:soumettre?null:existante.motifControle,
-      controleur:soumettre?null:existante.controleur,dateControle:soumettre?null:existante.dateControle});
-    EDIT_NOTICE_ID=null; ANCRAGE=null; await save(); VUE='donnees'; sync(); return;
+  // Le statut et l'auteur ne sont plus décidés ici : le serveur les fixe (voir notices.routes.js —
+  // une notice naît toujours en brouillon, quoi que le client envoie, et auteur_id vient de la
+  // session, jamais du corps de la requête). Ce corps ne porte que le contenu de la fiche.
+  const corps={annotateur:c.annotateur,mode:c.mode,serie:c.serie,numero_jo:c.numero_jo,cote:c.cote,...v,
+    duree_s:d,texte:(EXTRA&&EXTRA._texte)||'',image:(EXTRA&&EXTRA._image)||'',
+    champs_corriges:propose?FIDS.filter(k=>v[k]!==propose[k]):[],proposition:propose||null,
+    horodatage:new Date().toISOString()};
+
+  try{
+    if(EDIT_NOTICE_ID){
+      const id=EDIT_NOTICE_ID;
+      await apiNotices('/api/notices/'+id, {method:'PATCH', body:JSON.stringify(corps)});
+      if(soumettre) await apiNotices('/api/notices/'+id+'/soumettre', {method:'POST'});
+      EDIT_NOTICE_ID=null; EXTRA=null; ANCRAGE=null;
+      await chargerNoticesAdmin(); VUE='donnees'; sync(); return;
+    }
+    const creee=await apiNotices('/api/notices', {method:'POST', body:JSON.stringify(corps)});
+    if(soumettre) await apiNotices('/api/notices/'+creee.id+'/soumettre', {method:'POST'});
+  }catch(e){
+    // Ne masque jamais une erreur serveur (droits insuffisants, statut incompatible…) derrière
+    // un échec silencieux : l'archiviste doit savoir pourquoi sa fiche n'a pas été enregistrée.
+    alert("Impossible d'enregistrer la notice : "+e.message);
+    tResume(); return;
   }
-  DB.notices.push({id:'N'+Date.now()+Math.floor(Math.random()*99),annotateur:c.annotateur,mode:c.mode,
-    serie:c.serie,numero_jo:c.numero_jo,cote:c.cote,...v,duree_s:d,texte:(EXTRA&&EXTRA._texte)||'',image:(EXTRA&&EXTRA._image)||'',
-    champs_corriges:propose?FIDS.filter(k=>v[k]!==propose[k]):[],proposition:propose||null,horodatage:new Date().toISOString(),
-    auteur:trace,statut:soumettre?'a_valider':'brouillon',dateSoumission:soumettre?new Date().toISOString():null,
-    controleur:null,dateControle:null,motifControle:null});
   EXTRA=null;
   if(DB.queue.length) DB.queue.shift();
-  ANCRAGE=null; await save(); renderSaisie();
+  ANCRAGE=null; await save(); await chargerNoticesAdmin(); renderSaisie();
 }
 
 // ══════════════════════════════════════════════════ 2bis. CONTRÔLE QUALITÉ (admin et contrôleurs)
@@ -2030,7 +2057,7 @@ async function enregistrer(soumettre){
 const lireChamp=v=>{ v=(v==null?'':String(v)).trim(); return v?esc(v).replace(/\n/g,'<br>'):'<span style="color:var(--ink3)">—</span>'; };
 let refusNotice=null;
 function renderControle(){
-  const attente=DB.notices.filter(n=>n.statut==='a_valider');
+  const attente=NOTICES_ADMIN.filter(n=>n.statut==='a_valider');
   if(!attente.length){ refusNotice=null; return vide("Aucune fiche en attente de contrôle."); }
   const n=attente[0];
   let rows='';
@@ -2065,8 +2092,12 @@ function renderControle(){
   </div>`;
   const vb=document.getElementById('valider-fiche');
   if(vb) vb.onclick=async()=>{
-    n.statut='validee'; n.controleur=UTILISATEUR.nomComplet||UTILISATEUR.nom; n.dateControle=new Date().toISOString(); n.motifControle=null;
-    await save(); renderControle();
+    // Le bouton n'est déjà proposé qu'aux rôles contrôleur/admin (onglet Contrôle qualité
+    // inaccessible aux autres — voir PERMISSIONS), mais on ne se fie pas qu'à ça : si le
+    // serveur refuse quand même (session expirée entretemps, etc.), l'erreur est affichée.
+    try{ await apiNotices('/api/notices/'+n.id+'/valider', {method:'POST'}); }
+    catch(e){ alert("Validation refusée par le serveur : "+e.message); return; }
+    await chargerNoticesAdmin(); renderControle();
   };
   const rb=document.getElementById('refuser-fiche'); if(rb) rb.onclick=()=>{ refusNotice=n.id; renderControle(); };
   const ra=document.getElementById('refuser-annuler'); if(ra) ra.onclick=()=>{ refusNotice=null; renderControle(); };
@@ -2076,8 +2107,9 @@ function renderControle(){
     if(!motif){ alert('Un motif est requis pour refuser une fiche.'); return; }
     // Une fiche rejetée repasse en brouillon (et non dans un statut « refusée » à part) : l'auteur
     // la retrouve dans ses brouillons avec le motif affiché, la corrige et la resoumet.
-    n.statut='brouillon'; n.controleur=UTILISATEUR.nomComplet||UTILISATEUR.nom; n.dateControle=new Date().toISOString(); n.motifControle=motif;
-    refusNotice=null; await save(); renderControle();
+    try{ await apiNotices('/api/notices/'+n.id+'/rejeter', {method:'POST', body:JSON.stringify({motif})}); }
+    catch(e){ alert("Refus impossible côté serveur : "+e.message); return; }
+    refusNotice=null; await chargerNoticesAdmin(); renderControle();
   };
 }
 
@@ -2089,7 +2121,7 @@ const jset=s=>new Set(String(s||'').split(',').map(x=>x.trim().toLowerCase()).fi
 function jac(a,b){const A=jset(a),B=jset(b); if(!A.size&&!B.size)return null; let i=0;A.forEach(x=>{if(B.has(x))i++}); return i/(A.size+B.size-i);}
 
 function renderMesures(){
-  const N=DB.notices;
+  const N=NOTICES_ADMIN;
   if(!N.length) return vide("Aucune fiche enregistrée. Les mesures apparaîtront dès la première validation.");
   const man=N.filter(n=>n.mode==='manuel').map(n=>n.duree_s), ass=N.filter(n=>n.mode==='assisté').map(n=>n.duree_s);
   const gain=(man.length&&ass.length&&med(ass))?(med(man)/med(ass)).toFixed(1)+'×':'—';
@@ -2133,26 +2165,24 @@ function renderMesures(){
 
 // ══════════════════════════════════════════════════ 4. DONNÉES
 function renderDonnees(){
-  const N=DB.notices;
+  const N=NOTICES_ADMIN;
   const stg=UTILISATEUR.role==='stagiaire', admin=UTILISATEUR.role==='admin';
-  const mien=n2=> n2.auteur && (n2.auteur.nom===(UTILISATEUR.nomComplet||UTILISATEUR.nom));
+  // auteur_id est désormais fixé par le serveur depuis la session (voir notices.routes.js), pas
+  // une trace nom+rôle construite côté client — c'est directement l'identifiant fiable à comparer.
+  const mien=n2=> n2.auteur_id===UTILISATEUR.id;
   app.innerHTML=`
-  <div class="card"><h2>Exporter</h2><p class="sub">Exportez à chaque fin de séance et transmettez le fichier au responsable (dossier partagé, e-mail) : c'est votre sauvegarde, et c'est ainsi que votre travail rejoint le catalogue commun.</p>
+  <div class="card"><h2>Exporter</h2><p class="sub">Le catalogue est désormais partagé directement par le serveur — cet export ne sert plus qu'à garder une copie personnelle hors ligne, pas à faire rejoindre votre travail au catalogue commun (déjà fait automatiquement à chaque enregistrement).</p>
     <div class="actions"><button class="b pri" id="ej">Export JSON</button><button class="b" id="ec">Export CSV</button></div></div>
   ${admin?`
-  <div class="card"><h2>Importer et fusionner</h2>
-    <p class="sub">Chargez le fichier exporté par un stagiaire ou un autre archiviste pour l'ajouter au catalogue commun. Les fiches déjà présentes ne sont pas dupliquées.</p>
-    <input type="file" id="imp" accept=".json"><div id="im" class="hint"></div></div>
   <div class="card"><h2>Jeu de démonstration</h2>
-    <p class="sub">Huit notices du JO spécial n° 4 du 1<sup>er</sup> mars 2024, pour démarrer un cours sur un catalogue déjà alimenté.</p>
-    <div class="actions"><button class="b" id="seed">Charger les 8 notices</button>
-      ${N.length?`<button class="b" id="wipe" style="color:var(--red)">Tout effacer</button>`:''}</div></div>`:''}
+    <p class="sub">Huit notices du JO spécial n° 4 du 1<sup>er</sup> mars 2024, pour démarrer un cours sur un catalogue déjà alimenté. Créées, soumises puis validées via l'API, comme n'importe quelle notice.</p>
+    <div class="actions"><button class="b" id="seed">Charger les 8 notices</button></div></div>`:''}
   <div class="card"><h2>Notices enregistrées</h2>
     ${N.length?`<table><tr><th>Archiviste</th><th>Mode</th><th>Type</th><th>Intitulé</th><th>Statut</th><th>Durée</th><th></th></tr>
-    ${N.slice().reverse().map(n=>{
+    ${N.map(n=>{
       const statut=n.statut==='a_valider'?`<span style="color:var(--ochre)">à valider</span>`
         :n.statut==='validee'?`<span style="color:#255536">validée</span>`
-        :n.motifControle?`<span style="color:var(--red)" title="${esc(n.motifControle)}">brouillon — rejetée : ${esc(n.motifControle.slice(0,40))}</span>`
+        :n.motif_controle?`<span style="color:var(--red)" title="${esc(n.motif_controle)}">brouillon — rejetée : ${esc(n.motif_controle.slice(0,40))}</span>`
         :`<span style="color:var(--ink3)">brouillon</span>`;
       const modifiable = n.statut!=='validee' && (admin||mien(n));
       return `<tr><td>${esc(n.annotateur)}</td><td>${esc(tMode(n.mode))}</td><td>${esc(tType(n.type))||'—'}</td>
@@ -2163,37 +2193,38 @@ function renderDonnees(){
     :'<p class="empty">Aucune notice.</p>'}</div>`;
 
   const jour=()=>new Date().toISOString().slice(0,10);
-  document.getElementById('ej').onclick=()=>tele('depouillement-'+jour()+'.json',JSON.stringify(DB,null,2),'application/json');
+  document.getElementById('ej').onclick=()=>tele('depouillement-'+jour()+'.json',JSON.stringify({notices:N},null,2),'application/json');
   document.getElementById('ec').onclick=()=>{
     const cols=['annotateur','mode','serie','numero_jo','cote',...FIDS,'duree_s','horodatage'];
     const q=v=>'"'+String(Array.isArray(v)?v.join('; '):(v==null?'':v)).replace(/"/g,'""')+'"';
     tele('depouillement-'+jour()+'.csv','\uFEFF'+[cols.join(',')].concat(N.map(n=>cols.map(c=>q(n[c])).join(','))).join('\n'),'text/csv;charset=utf-8');
   };
-  const impEl=document.getElementById('imp');
-  if(impEl) impEl.onchange=e=>{ const f=e.target.files[0]; if(!f)return;
-    const r=new FileReader(); r.onload=async()=>{ try{ const o=JSON.parse(r.result);
-      const h=new Set(DB.notices.map(x=>x.id)), a=(o.notices||[]).filter(x=>!h.has(x.id));
-      DB.notices.push(...a); ANCRAGE=null; await save();
-      document.getElementById('im').textContent=a.length+' notice(s) ajoutée(s).'; renderDonnees();
-    }catch(x){ document.getElementById('im').textContent="Fichier illisible."; } };
-    r.readAsText(f); };
   const seedEl=document.getElementById('seed');
   if(seedEl) seedEl.onclick=async()=>{
-    const h=new Set(DB.notices.map(x=>x.id));
-    DB.notices.push(...SEED.filter(s=>!h.has(s.id))); ANCRAGE=null; await save(); renderDonnees();
+    if(N.some(n=>n.annotateur==='Jeu de démonstration') && !confirm('Le jeu de démonstration semble déjà chargé. Le recharger quand même ?')) return;
+    seedEl.disabled=true; seedEl.textContent='Chargement…';
+    try{
+      for(const s of SEED){
+        const corps={...s}; delete corps.id;
+        const creee=await apiNotices('/api/notices', {method:'POST', body:JSON.stringify(corps)});
+        await apiNotices('/api/notices/'+creee.id+'/soumettre', {method:'POST'});
+        await apiNotices('/api/notices/'+creee.id+'/valider', {method:'POST'});
+      }
+    }catch(e){ alert("Chargement du jeu de démonstration interrompu : "+e.message); }
+    ANCRAGE=null; await chargerNoticesAdmin(); renderDonnees();
   };
-  const w=document.getElementById('wipe');
-  if(w) w.onclick=async()=>{ if(confirm('Effacer toutes les notices et la file ?')){ DB.notices=[];DB.queue=[];ANCRAGE=null;await save();sync(); } };
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
     if(!confirm('Supprimer cette notice ?')) return;
-    DB.notices=DB.notices.filter(x=>x.id!==b.dataset.del); ANCRAGE=null; await save(); renderDonnees(); });
+    try{ await apiNotices('/api/notices/'+b.dataset.del, {method:'DELETE'}); }
+    catch(e){ alert("Suppression refusée par le serveur : "+e.message); return; }
+    ANCRAGE=null; await chargerNoticesAdmin(); renderDonnees(); });
   document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{
     DB.config=DB.config||{annotateur:UTILISATEUR.nomComplet||UTILISATEUR.nom,mode:'manuel',serie:SERIES[0],numero_jo:'',cote:''};
     ouvrirModif(b.dataset.mod); });
   document.querySelectorAll('[data-soum]').forEach(b=>b.onclick=async()=>{
-    const n=DB.notices.find(x=>x.id===b.dataset.soum); if(!n) return;
-    n.statut='a_valider'; n.dateSoumission=new Date().toISOString(); n.motifControle=null;
-    await save(); renderDonnees();
+    try{ await apiNotices('/api/notices/'+b.dataset.soum+'/soumettre', {method:'POST'}); }
+    catch(e){ alert("Soumission refusée par le serveur : "+e.message); return; }
+    await chargerNoticesAdmin(); renderDonnees();
   });
 }
 function tele(nom,contenu,mime){ const a=document.createElement('a');
@@ -3350,7 +3381,7 @@ function attacherPanneauCle(){
   const no=document.getElementById('cle-no'); if(no) no.onclick=()=>{MONTRER_CLE=false;renderAssistant()};
 }
 function renderAssistant(){
-  if(!DB.notices.length) return vide("L'assistant ne peut répondre que sur des notices validées. Le catalogue est vide.");
+  if(!OPAC().length) return vide("L'assistant ne peut répondre que sur des notices validées. Le catalogue est vide.");
   app.innerHTML=panneauCle()+`<div class="card"><h2>Recherche conversationnelle</h2>
     <p class="sub">Une vraie conversation : l'assistant se souvient des échanges précédents et peut répondre à une salutation ou à une question de suivi. Pour toute affirmation sur un acte, il s'appuie uniquement sur les notices du fonds, retrouvées automatiquement à chaque tour. Si le service de rédaction n'est pas joignable, il retombe sur un simple filtrage par mots-clés, sans mémoire de conversation.</p>
     <div style="min-height:150px;margin-bottom:14px">${CHAT.length?CHAT.map(m=>{
