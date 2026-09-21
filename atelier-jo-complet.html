@@ -200,7 +200,7 @@ mark{background:#FBEFC4;color:inherit;padding:0 1px;border-radius:2px}
 
 <script>
 // ══════════════════════════════════════════════════ REPLI DE STOCKAGE
-// Sur un poste ouvert dans un navigateur ordinaire (double-clic, ou via demarrer-atelier.bat), window.storage
+// Sur un poste ouvert dans un navigateur ordinaire (double-clic, ou via atelier-jo-api/demarrer-serveur.bat), window.storage
 // n'existe pas nativement : sans ce repli, rien ne survivrait à la fermeture de l'onglet (catalogue, comptes, session).
 if(!window.storage){
   window.storage={
@@ -1626,7 +1626,7 @@ async function reconnaitreLocal(fichiers,garderJournal){
   }catch(e){
       const w=/fake worker|Cannot load script|worker/i.test(e.message||'');
       JOURNAL.push({t:'Lecture impossible : '+e.message,err:1});
-      if(w) JOURNAL.push({t:"Le navigateur refuse de charger le lecteur PDF parce que la page est ouverte directement depuis le disque. Lancez demarrer-atelier.bat, placé dans le même dossier : l'atelier s'ouvrira servi par un petit serveur local et la lecture des PDF fonctionnera. Sinon, ouvrez le PDF dans un lecteur, copiez le texte et collez-le dans le champ « Texte déjà transcrit ».",err:1});
+      if(w) JOURNAL.push({t:"Le navigateur refuse de charger le lecteur PDF parce que la page est ouverte directement depuis le disque, sans passer par le serveur. Lancez atelier-jo-api/demarrer-serveur.bat, puis ouvrez l'atelier depuis l'adresse qu'il affiche : la lecture des PDF fonctionnera. Sinon, ouvrez le PDF dans un lecteur, copiez le texte et collez-le dans le champ « Texte déjà transcrit ».",err:1});
       enCours=false; return renderTele(); }
 
   if(TEXTECOLLE.trim()) pages.push({page:pages.length+1, cols:[netto(TEXTECOLLE),'']});
@@ -1676,7 +1676,7 @@ async function ocrWorker(){
     // renvoyée n'est parfois même pas un objet Error (juste une chaîne), d'où le besoin de la retraiter ici.
     const brut=String((e&&e.message)||e||'');
     if(location.protocol==='file:'){
-      throw new Error("le navigateur refuse de charger le moteur OCR parce que la page est ouverte directement depuis le disque. Lancez demarrer-atelier.bat, placé dans le même dossier : l'atelier s'ouvrira servi par un petit serveur local et l'OCR fonctionnera.");
+      throw new Error("le navigateur refuse de charger le moteur OCR parce que la page est ouverte directement depuis le disque, sans passer par le serveur. Lancez atelier-jo-api/demarrer-serveur.bat, puis ouvrez l'atelier depuis l'adresse qu'il affiche : l'OCR fonctionnera.");
     }
     throw new Error(brut||'échec du chargement du moteur OCR');
   }
