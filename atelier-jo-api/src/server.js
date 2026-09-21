@@ -19,27 +19,65 @@ app.use('/api', require('./routes/commandes.routes'));
 // Sert atelier-jo-complet.html (à placer dans public/) sur la même origine
 // que l'API : c'est ce qui évite le blocage "contenu mixte" du navigateur.
 //
-// Copié automatiquement ici plutôt que depuis le script de démarrage .bat :
-// cette copie s'applique quel que soit la façon dont le serveur est lancé
-// (le .bat, npm start, un gestionnaire de processus...), alors qu'un .bat
-// ne protège que ce chemin de lancement précis. Seulement si absent — un
-// public/index.html déjà présent (personnalisé, ou déjà copié) n'est jamais écrasé.
+// Synchronisé automatiquement ici plutôt que depuis le script de démarrage
+// .bat : ça s'applique quel que soit la façon dont le serveur est lancé (le
+// .bat, npm start, un gestionnaire de processus...), alors qu'un .bat ne
+// protège que ce chemin de lancement précis.
+//
+// "Absent" seul ne suffit pas comme condition : une fois la première copie
+// faite, une modification ultérieure de atelier-jo-complet.html ne serait
+// plus jamais reprise, silencieusement. On compare donc le CONTENU des deux
+// fichiers à chaque démarrage :
+//   - contenu identique            → rien à faire, rien à dire.
+//   - contenu différent, source plus récente (mtime)
+//                                   → la source a été mise à jour depuis la
+//                                     dernière copie : on recopie, et on le dit.
+//   - contenu différent, source pas plus récente
+//                                   → public/index.html a probablement été
+//                                     modifié directement (pas via cette copie) :
+//                                     on ne l'écrase jamais, mais on avertit
+//                                     clairement au lieu de rester silencieux.
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const INDEX_DEST = path.join(PUBLIC_DIR, 'index.html');
-if (!fs.existsSync(INDEX_DEST)) {
+function synchroniserFrontend() {
   const SOURCE = path.join(__dirname, '..', '..', 'atelier-jo-complet.html');
-  if (fs.existsSync(SOURCE)) {
+  if (!fs.existsSync(SOURCE)) {
+    if (!fs.existsSync(INDEX_DEST)) {
+      console.warn(
+        `ATTENTION : public/index.html est absent et ${SOURCE} est introuvable. ` +
+        'Le serveur démarre quand même mais ne sert aucune page pour le moment — ' +
+        "placez atelier-jo-complet.html à la racine du dépôt, ou copiez-le vous-même vers public/index.html."
+      );
+    }
+    return; // rien à comparer sans source : on laisse public/index.html tel quel, silencieusement.
+  }
+
+  if (!fs.existsSync(INDEX_DEST)) {
     fs.mkdirSync(PUBLIC_DIR, { recursive: true });
     fs.copyFileSync(SOURCE, INDEX_DEST);
     console.log(`public/index.html absent : copié automatiquement depuis ${SOURCE}.`);
+    return;
+  }
+
+  const contenuSource = fs.readFileSync(SOURCE);
+  const contenuDest = fs.readFileSync(INDEX_DEST);
+  if (contenuSource.equals(contenuDest)) return; // déjà synchronisé, rien à signaler.
+
+  const mtimeSource = fs.statSync(SOURCE).mtimeMs;
+  const mtimeDest = fs.statSync(INDEX_DEST).mtimeMs;
+  if (mtimeSource > mtimeDest) {
+    fs.copyFileSync(SOURCE, INDEX_DEST);
+    console.log(`public/index.html mis à jour automatiquement : ${SOURCE} a été modifié depuis la dernière copie.`);
   } else {
     console.warn(
-      `ATTENTION : public/index.html est absent et ${SOURCE} est introuvable. ` +
-      'Le serveur démarre quand même mais ne sert aucune page pour le moment — ' +
-      "placez atelier-jo-complet.html à la racine du dépôt, ou copiez-le vous-même vers public/index.html."
+      `ATTENTION : public/index.html diffère de ${SOURCE} mais n'est pas plus ancien que lui — ` +
+      'il a probablement été modifié directement plutôt que régénéré depuis la source. ' +
+      'Laissé tel quel pour ne pas écraser ce changement ; supprimez-le vous-même si vous voulez ' +
+      'qu\'il soit resynchronisé automatiquement au prochain démarrage.'
     );
   }
 }
+synchroniserFrontend();
 app.use(express.static(PUBLIC_DIR));
 
 const PORT = process.env.PORT || 3000;
