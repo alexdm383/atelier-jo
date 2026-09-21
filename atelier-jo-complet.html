@@ -1534,11 +1534,14 @@ async function imageDe(data){
   await new Promise((res,rej)=>{ img.onload=res; img.onerror=()=>rej(new Error('image illisible')); img.src='data:image/jpeg;base64,'+data; });
   return img;
 }
-async function reconnaitreOCR(fichiers){
+async function reconnaitreOCR(fichiers,captures){
   enCours=true; TROUVE=[]; JOURNAL=[]; FICHIER=''; renderTele();
   let pages=[];
   try{ pages=await pagesDe(fichiers); }
   catch(e){ JOURNAL.push({t:'Lecture du fichier impossible : '+e.message,err:1}); enCours=false; return renderTele(); }
+  // Les pages numérisées à l'écran (CAPTURES) sont déjà des données image en base64 : elles rejoignent
+  // directement la liste des pages à reconnaître, sans repasser par pagesDe() qui attend des File.
+  if(captures&&captures.length) captures.forEach((data,i)=> pages.push({page:pages.length+i+1,data}));
   if(!pages.length){ JOURNAL.push({t:'Aucune page à traiter.',err:1}); enCours=false; return renderTele(); }
 
   FICHIER=`${pages.length} page(s) — reconnaissance OCR sans réseau, plusieurs dizaines de secondes par page`;
@@ -1575,7 +1578,7 @@ async function reconnaitreOCR(fichiers){
   }
   if(vides) JOURNAL.push({t:`${vides} page(s) sans texte exploitable sur ${pages.length}.`,err:1});
   JOURNAL.push({t:`Terminé : ${TROUVE.length} notice(s) proposée(s) par OCR, sans aucun appel réseau`});
-  enCours=false; renderTele();
+  enCours=false; CAPTURES=[]; renderTele();
 }
 
 // ══════════════════════════════════════════════════ 1. NUMÉRISATION
@@ -1623,6 +1626,12 @@ function renderTele(){
     <input type="file" id="cam" accept="image/*" capture="environment" multiple ${enCours?'disabled':''}>
     <p class="hint">Sur téléphone ou tablette, ouvre directement l'appareil photo.</p>
 
+    <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:18px 0 8px">Numériser à l'écran</div>
+    ${STREAM?`<video id="vid" playsinline muted style="width:100%;max-height:340px;background:#000;border-radius:5px;object-fit:contain"></video>
+      <div class="actions"><button class="b pri" id="snap">Numériser la page</button><button class="b" id="off">Fermer</button></div>`
+    :`<div class="actions"><button class="b" id="on">Numériser une page</button></div>`}
+    <p class="hint">Utilise la caméra de l'appareil. Les pages numérisées ainsi sont lues par « Reconnaître par OCR » ci-dessous, comme un fichier importé — pas par « Traiter avec le modèle ».</p>
+    ${CAPTURES.length?`<p class="hint" style="color:var(--ochre)">${CAPTURES.length} page(s) numérisée(s), prêtes pour l'OCR. <button class="b" id="vidc" style="padding:2px 9px;font-size:12px;margin-left:6px">Effacer</button></p>`:''}
 
     <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:18px 0 8px">Texte déjà transcrit</div>
     <textarea id="colle" placeholder="Collez ici le texte d'un numéro issu de votre logiciel de reconnaissance de caractères" style="min-height:70px;font-size:13.5px">${esc(TEXTECOLLE)}</textarea>
@@ -1680,7 +1689,7 @@ function renderTele(){
   const ocr=document.getElementById('ocr');
   if(ocr) ocr.onclick=()=>{
     const L=[...(f.files||[]),...(cm.files||[]),...LOT_FILES];
-    if(L.length) reconnaitreOCR(L); else f.click(); };
+    if(L.length||CAPTURES.length) reconnaitreOCR(L,CAPTURES); else f.click(); };
   document.getElementById('go').onclick=()=>{
     const L=[...(f.files||[]),...(cm.files||[]),...LOT_FILES];
     if(L.length||CAPTURES.length) traiter(L); else f.click();
