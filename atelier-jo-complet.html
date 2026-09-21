@@ -324,9 +324,20 @@ function vue(n){
  niveau:n.niveau||'pièce',importance:n.importance||'',acces:n.acces||'',langue:n.langue||'fr et en',
  annotateur:n.annotateur||'',horodatage:n.horodatage||'',mode:n.mode||'',corriges:n.champs_corriges||[],
  complet:!!((n.intitule_fr||n.intitule)&&(n.resume_fr||n.resume))};}
-// Une fiche sans statut vient d'avant le contrôle qualité (jeu de démonstration, catalogues déjà en service) :
-// elle reste visible. Seules les fiches explicitement marquées « à contrôler » sont retenues hors du public.
-const OPAC=()=>DB.notices.filter(n=>!n.statut||n.statut==='validee').map(vue);
+// Notices du catalogue public, chargées depuis GET /api/notices — SANS credentials:'include' :
+// c'est le serveur qui filtre aux seules notices validées pour un appel anonyme (voir
+// notices.routes.js), et l'omission délibérée des identifiants garantit que ce cache reste la
+// vue publique même si l'agent consultant cet onglet est par ailleurs connecté à l'espace
+// Administration dans le même onglet de navigateur. OPAC() reste synchrone : tous ses appelants
+// (recherche, plan de classement, chronologie…) n'ont pas à devenir asynchrones pour autant.
+let NOTICES_OPAC=[], OPAC_CHARGE=false;
+async function chargerNotices(){
+  try{ const r=await fetch('/api/notices'); if(r.ok) NOTICES_OPAC=await r.json(); }
+  catch(e){ NOTICES_OPAC=[]; }
+}
+// Filtre défensif conservé même si le serveur filtre déjà : ne coûte rien, et ne restreint
+// jamais davantage que ce que le serveur garantit déjà pour un appel non authentifié.
+const OPAC=()=>NOTICES_OPAC.filter(n=>!n.statut||n.statut==='validee').map(vue);
 
 // ══════════════════════════════════════════════════ STOCKAGE
 async function load(){ try{ const r=await window.storage.get(KEY); if(r&&r.value) DB=JSON.parse(r.value); if(!DB.queue) DB.queue=[]; if(!DB.achats) DB.achats=[]; if(!DB.achatsScan) DB.achatsScan=[]; if(!DB.commandes) DB.commandes=[]; }
@@ -475,6 +486,11 @@ function sync(){
     majURL();
     return;
   }
+
+  // Un seul chargement (gardé par OPAC_CHARGE) : la page s'affiche tout de suite avec le cache
+  // encore vide plutôt que d'attendre le réseau, puis se redessine dès que la réponse arrive —
+  // la consultation publique ne doit jamais rester bloquée en attente d'une session.
+  if(ESPACE==='opac' && !OPAC_CHARGE){ OPAC_CHARGE=true; chargerNotices().then(sync); }
 
   const onglets = ESPACE==='admin' ? TABS.admin.filter(([k])=>PERMISSIONS[UTILISATEUR.role].includes(k))
     : TABS.opac.filter(([k])=> k!=='mescommandes' || (UTILISATEUR&&UTILISATEUR.role===ROLE_PUBLIC));
