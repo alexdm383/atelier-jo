@@ -12,7 +12,11 @@ cp .env.example .env
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # coller le résultat dans JWT_SECRET
 ```
 
-Placer `atelier-jo-complet.html` (la version corrigée) dans `public/`, renommé `index.html` :
+`atelier-jo-complet.html` doit être servi depuis `public/index.html`. Le serveur
+s'en charge tout seul au premier démarrage : si `public/index.html` est absent, il
+copie automatiquement le fichier trouvé à la racine du dépôt (voir `server.js`) et
+l'indique dans les logs. Ce n'est donc à faire à la main que si le fichier source
+n'est pas au bon endroit (autre disposition de dossiers) :
 ```bash
 cp /chemin/vers/atelier-jo-complet.html public/index.html
 ```

@@ -56,6 +56,14 @@ router.post('/commandes', authentifier, autoriser('chercheur'), (req, res) => {
   res.status(201).json(versVue(ligne));
 });
 
+// Statistique publique minimale, sans authentification : un seul entier agrégé, aucune
+// identité ni contenu de commande — pour l'indicateur « DIP délivrés » du catalogue public
+// (page Normes), qui ne doit jamais afficher un faux zéro faute de route accessible.
+router.get('/commandes/total-validees', (req, res) => {
+  const { total } = db.prepare("SELECT COUNT(*) AS total FROM commandes WHERE statut = 'validee'").get();
+  res.json({ total });
+});
+
 // Ne renvoie que les commandes du compte connecté — jamais par un paramètre
 // d'URL contenant l'email en clair, uniquement via la session.
 router.get('/mes-commandes', authentifier, autoriser('chercheur'), (req, res) => {

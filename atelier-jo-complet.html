@@ -3238,12 +3238,18 @@ function renderInstr(){
   };
 }
 // ══════════════════════════════════════════════════ NORMES
+// « DIP délivrés » : seul GET /api/commandes/total-validees (public, sans identifiants, un seul
+// entier agrégé) peut renseigner ce chiffre depuis que achats/achatsScan ne sont plus un tableau
+// local partagé. Chargé une fois, à la demande (personne d'autre que Normes n'en a besoin) ; en
+// cas d'échec, TOTAL_DIP reste null et « indisponible » s'affiche — jamais un faux zéro.
+let TOTAL_DIP=null, DIP_CHARGE=false;
+async function chargerTotalDIP(){
+  try{ const r=await fetch('/api/commandes/total-validees'); if(r.ok){ const d=await r.json(); TOTAL_DIP=d.total; } }
+  catch(e){}
+}
 function renderNormes(){
-  // « DIP délivrés » n'a plus de source accessible à un visiteur public ou à un chercheur : ce
-  // comptage global existait quand achats/achatsScan étaient un tableau local partagé par tout le
-  // monde ; côté API, seul un admin peut lister l'ensemble des commandes (GET /api/commandes).
-  // Affiché à 0 plutôt que d'exposer cette route à un visiteur non authentifié pour une statistique.
-  const L=OPAC(), nq=DB.queue.length, na=0;
+  if(!DIP_CHARGE){ DIP_CHARGE=true; chargerTotalDIP().then(sync); }
+  const L=OPAC(), nq=DB.queue.length, na=TOTAL_DIP===null?'indisponible':TOTAL_DIP;
   const oblig=['reference','intitule','ds','niveau','producteur'];
   const compl=L.length?Math.round(100*L.reduce((s,n)=>s+oblig.filter(k=>n[k]).length,0)/(L.length*oblig.length)):0;
   app.innerHTML=`
