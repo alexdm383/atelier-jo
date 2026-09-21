@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="pdf.min.js" onerror="this.onerror=null;document.write('\x3Cscript src=\x22https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js\x22\x3E\x3C/script\x3E')"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
 
 <style>
@@ -49,6 +49,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-of
 button.b{font:inherit;font-size:14px;border-radius:5px;padding:9px 18px;cursor:pointer;border:1px solid var(--ruleS);background:#fff;color:var(--ink)}
 button.b:hover{border-color:var(--ink3)}
 button.b.pri{background:var(--ink);border-color:var(--ink);color:#fff}
+button.b.urgent{background:var(--ochre);border-color:var(--ochre);color:#fff}
 button.b:disabled{opacity:.45;cursor:default}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
@@ -182,6 +183,7 @@ mark{background:#FBEFC4;color:inherit;padding:0 1px;border-radius:2px}
     <div class="brand">Atelier du Journal officiel<em>Archives Nationales du Cameroun</em></div>
     <div class="who" id="who">—</div>
     <div class="who" id="compte" style="margin-left:8px"></div>
+    <button class="b pri" id="sauveTravail" hidden style="margin-left:8px">Enregistrer le travail</button>
     <div id="navAuth"></div>
     <div class="seg" style="margin-left:8px">
       <button data-l="fr" aria-pressed="true">FR</button>
@@ -193,6 +195,7 @@ mark{background:#FBEFC4;color:inherit;padding:0 1px;border-radius:2px}
 
 <main>
   <div class="warn" id="warn" hidden></div>
+  <div id="avisRole" class="hint" style="margin:0 0 14px" hidden></div>
   <div id="app"></div>
 </main>
 
@@ -212,26 +215,29 @@ const KEY='atelier-jo-complet';
 let DB={config:null,notices:[],queue:[]}, memoryOnly=false;
 let ESPACE='opac', VUE='accueil';
 
-// ══════════════════════════════════════════════════ COMPTES ET RÔLES
-// Comptes et session gardés hors de DB : ils ne doivent jamais voyager dans un export/import/fusion du catalogue.
-const KEY_AUTH='atelier-jo-comptes', KEY_SESSION='atelier-jo-session', KEY_GEMINI='atelier-jo-cle-gemini';
-let COMPTES=[], UTILISATEUR=null, authMemoire=false;
-let PUBLIC_AUTH=null; // 'login' | 'inscription' | null — écran de connexion publique affiché par-dessus le catalogue
+// ══════════════════════════════════════════════════ IDENTIFICATION ET RÔLES
+// Pas de mot de passe : sans back-end, un mot de passe stocké en clair dans ce fichier ne serait qu'un
+// théâtre de sécurité. L'identification (nom + rôle déclaré) sert la traçabilité de qui a fait quoi,
+// pas un contrôle d'accès réel — voir le bandeau affiché dans l'espace Administration.
+// Session gardée hors de DB : ne doit jamais voyager dans un export/import/fusion du catalogue.
+const KEY_SESSION='atelier-jo-session', KEY_GEMINI='atelier-jo-cle-gemini';
+let UTILISATEUR=null;
 let LOGIN_CONTEXTE=null; // 'stagiaire' quand la connexion est atteinte par le raccourci dédié, pour adapter le message
 const PERMISSIONS={
-  admin:      ['versement','tele','saisie','mesures','donnees','comptes','commandes','controle'],
+  admin:      ['versement','tele','saisie','mesures','donnees','commandes','controle'],
   operateur:  ['versement','tele','saisie','mesures','donnees'],
   controleur: ['versement','tele','saisie','mesures','donnees','controle'],
   stagiaire:  ['versement','tele','saisie','donnees'],
   chercheur:  []
 };
 const ROLES=[['admin','Administrateur'],['operateur','Opérateur'],['controleur','Opérateur — contrôleur qualité'],['stagiaire','Stagiaire'],['chercheur','Chercheur (public)']];
-// Rôle du catalogue public, normalement obtenu par inscription libre plutôt que créé depuis l'onglet Comptes.
-// N'accède jamais à l'espace Administration, quels que soient les droits qu'on lui donnerait par erreur.
+// Rôle du catalogue public, obtenu directement depuis le formulaire de commande (nom + contact), sans
+// écran de connexion séparé. N'accède jamais à l'espace Administration, quels que soient les droits
+// qu'on lui donnerait par erreur.
 const ROLE_PUBLIC='chercheur';
 
 const TABS={
-  admin:[['versement','Versement'],['tele','Numériser et traiter'],['saisie','Saisie'],['controle','Contrôle qualité'],['mesures','Mesures'],['donnees','Données'],['comptes','Comptes'],['commandes','Commandes']],
+  admin:[['versement','Versement'],['tele','Numériser et traiter'],['saisie','Saisie'],['controle','Contrôle qualité'],['mesures','Mesures'],['donnees','Données'],['commandes','Commandes']],
   opac:[['accueil','Accueil'],['rech','Rechercher'],['classement','Plan de classement'],['instr','Instruments de recherche'],['chrono','Chronologie'],['thes','Thésaurus'],['assist','Assistant'],['integ','Intégrité'],['normes','Normes'],['cmd','Commander'],['mescommandes','Mes commandes']]
 };
 const SERIES=['Amtsblatt für das Schutzgebiet Kamerun (1908-1914)','JO du Cameroun — mandat/tutelle française (1920-1959)',
@@ -326,24 +332,20 @@ const OPAC=()=>DB.notices.filter(n=>!n.statut||n.statut==='validee').map(vue);
 // ══════════════════════════════════════════════════ STOCKAGE
 async function load(){ try{ const r=await window.storage.get(KEY); if(r&&r.value) DB=JSON.parse(r.value); if(!DB.queue) DB.queue=[]; if(!DB.achats) DB.achats=[]; if(!DB.achatsScan) DB.achatsScan=[]; if(!DB.commandes) DB.commandes=[]; }
   catch(e){ if(!window.storage) memoryOnly=true; } }
-async function save(){ if(memoryOnly) return; try{ await window.storage.set(KEY,JSON.stringify(DB)); }catch(e){ memoryOnly=true; avert(); } }
-function avert(){ const w=document.getElementById('warn'); w.hidden=false;
-  w.textContent="L'enregistrement n'est pas disponible sur cet appareil. Le travail reste en mémoire jusqu'à la fermeture de l'onglet : exportez avant de fermer."; }
-
-// ══════════════════════════════════════════════════ COMPTES ET SESSION
-// Gardés dans des clés séparées de KEY : ne doivent jamais transiter par l'export/import/fusion du catalogue (Données).
-const idCompte=()=>'U'+Date.now()+Math.floor(Math.random()*99);
-async function loadAuth(){
-  try{ const r=await window.storage.get(KEY_AUTH); if(r&&r.value) COMPTES=JSON.parse(r.value); }
-  catch(e){ authMemoire=true; }
-  if(!COMPTES.length){
-    COMPTES=[{id:idCompte(),nom:'admin',role:'admin',mdp:'admin'},
-      {id:idCompte(),nom:'operateur',role:'operateur',mdp:'operateur'},
-      {id:idCompte(),nom:'stagiaire',role:'stagiaire',mdp:'stagiaire'}];
-    await saveAuth();
-  }
+// DIRTY : des changements existent en mémoire mais n'ont pas encore été mis dans un fichier exporté.
+// Sans back-end, c'est la SEULE copie qui survit à la fermeture de l'onglet en mode memoryOnly.
+let DIRTY=false;
+async function save(){
+  if(memoryOnly){ DIRTY=true; majSauvegarde(); return; }
+  try{ await window.storage.set(KEY,JSON.stringify(DB)); }
+  catch(e){ memoryOnly=true; DIRTY=true; avert(); majSauvegarde(); }
 }
-async function saveAuth(){ if(authMemoire) return; try{ await window.storage.set(KEY_AUTH,JSON.stringify(COMPTES)); }catch(e){ authMemoire=true; } }
+function avert(){ const w=document.getElementById('warn'); w.hidden=false;
+  w.textContent="L'enregistrement automatique n'est pas disponible sur cet appareil. Le travail reste en mémoire jusqu'à la fermeture de l'onglet : cliquez sur « Enregistrer le travail » en haut de la page pour exporter un fichier de sauvegarde avant de fermer."; }
+
+// ══════════════════════════════════════════════════ SESSION
+// Gardée dans une clé séparée de KEY : ne doit jamais transiter par l'export/import/fusion du catalogue (Données).
+const idCompte=()=>'U'+Date.now()+Math.floor(Math.random()*99);
 async function loadSession(){ try{ const r=await window.storage.get(KEY_SESSION); if(r&&r.value) UTILISATEUR=JSON.parse(r.value); }catch(e){} }
 async function saveSession(){ try{ await window.storage.set(KEY_SESSION, UTILISATEUR?JSON.stringify(UTILISATEUR):''); }catch(e){} }
 // Clé API Gemini de l'utilisateur, hors de DB pour la même raison que les comptes : elle ne doit
@@ -361,78 +363,51 @@ function renderLogin(){
   const stg=LOGIN_CONTEXTE==='stagiaire', op=LOGIN_CONTEXTE==='operateur';
   const titreCtx=stg?' — Espace stagiaire':op?' — Espace opérateur':'';
   const sousTitreCtx=stg?'Réservé aux stagiaires des Archives.':op?'Réservé aux opérateurs et contrôleurs qualité des Archives.':'Espace Administration — réservé aux agents des Archives.';
+  const rolesInternes=ROLES.filter(r=>r[0]!==ROLE_PUBLIC);
+  const roleParDefaut=stg?'stagiaire':op?'operateur':'admin';
   app.innerHTML=`
   <button class="back" id="bkPub">← ${t('Retour au catalogue public','Back to the public catalogue')}</button>
-  <div class="card" style="max-width:420px;margin:16px auto 40px"><h2>Connexion${titreCtx}</h2>
+  <div class="card" style="max-width:420px;margin:16px auto 40px"><h2>Identification${titreCtx}</h2>
     <p class="sub">${sousTitreCtx}</p>
-    <div class="row"><label class="lb">Identifiant</label><div><input id="lg-nom" autocomplete="username"></div></div>
-    <div class="row"><label class="lb">Mot de passe</label><div><input id="lg-mdp" type="password" autocomplete="current-password"></div></div>
+    <div class="row"><label class="lb">Nom complet</label><div><input id="lg-nom" autocomplete="name"></div></div>
+    <div class="row"><label class="lb">Rôle</label><div><select id="lg-role">${rolesInternes.map(r=>`<option value="${r[0]}" ${r[0]===roleParDefaut?'selected':''}>${esc(r[1])}</option>`).join('')}</select></div></div>
     <div id="lg-err" class="hint" style="color:var(--red)"></div>
-    <div class="actions"><button class="b pri" id="lg-go">Se connecter</button></div>
-    <p class="hint" style="margin-top:18px">Connexion locale à ce poste, à des fins d'organisation du travail : ce n'est pas un compte sécurisé au sens strict, les identifiants restent lisibles dans ce fichier. La sécurité réelle des accès sera mise en place avec le prochain projet.</p></div>`;
+    <div class="actions"><button class="b pri" id="lg-go">Entrer</button></div>
+    <p class="hint" style="margin-top:18px">Cette identification déclarative sert à tracer qui a saisi ou contrôlé chaque fiche ; ce n'est <b>pas</b> un contrôle d'accès sécurisé — rien n'empêche de se déclarer sous un rôle qui n'est pas le sien. La sécurité réelle des accès sera mise en place avec le prochain projet.</p></div>`;
   document.getElementById('bkPub').onclick=()=>{ ESPACE='opac'; VUE=TABS.opac[0][0]; LOGIN_CONTEXTE=null; sync(); scrollTo(0,0); };
   const go=async()=>{
-    const nom=document.getElementById('lg-nom').value.trim(), mdp=document.getElementById('lg-mdp').value;
-    const c=COMPTES.find(x=>x.nom.toLowerCase()===nom.toLowerCase() && x.mdp===mdp);
-    if(!c){ document.getElementById('lg-err').textContent='Identifiant ou mot de passe incorrect.'; return; }
-    UTILISATEUR={id:c.id,nom:c.nom,role:c.role,nomComplet:c.nomComplet}; await saveSession(); LOGIN_CONTEXTE=null;
-    VUE=c.role==='controleur'?'controle':'versement'; sync();
+    const nom=document.getElementById('lg-nom').value.trim();
+    if(!nom){ document.getElementById('lg-err').textContent='Le nom est requis.'; document.getElementById('lg-nom').focus(); return; }
+    const role=document.getElementById('lg-role').value;
+    UTILISATEUR={id:idCompte(),nom,nomComplet:nom,role}; await saveSession(); LOGIN_CONTEXTE=null;
+    VUE=role==='controleur'?'controle':'versement'; sync();
   };
   document.getElementById('lg-go').onclick=go;
-  document.getElementById('lg-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
+  document.getElementById('lg-nom').onkeydown=e=>{ if(e.key==='Enter') go(); };
   document.getElementById('lg-nom').focus();
 }
 
-function renderAuthPublic(){
-  const mode = PUBLIC_AUTH==='inscription' ? 'inscription' : 'login';
-  app.innerHTML = mode==='login' ? `
-  <div class="card" style="max-width:420px;margin:40px auto"><h2>Connexion</h2>
-    <p class="sub">Pour commander le texte intégral d'un acte, ou suivre vos commandes.</p>
-    <div class="row"><label class="lb">Adresse e-mail</label><div><input id="pl-mail" autocomplete="username"></div></div>
-    <div class="row"><label class="lb">Mot de passe</label><div><input id="pl-mdp" type="password" autocomplete="current-password"></div></div>
-    <div id="pl-err" class="hint" style="color:var(--red)"></div>
-    <div class="actions"><button class="b pri" id="pl-go">Se connecter</button></div>
-    <p class="hint" style="margin-top:14px">Pas encore de compte ? <button id="pl-vers-inscr" style="font:inherit;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">Créer un compte</button></p>
-  </div>`
-  : `
-  <div class="card" style="max-width:460px;margin:40px auto"><h2>Créer un compte</h2>
-    <p class="sub">Réservé à la consultation et à la commande depuis le catalogue public. La recherche et la lecture des notices restent libres sans compte : celui-ci ne sert qu'à suivre vos commandes.</p>
-    <div class="row"><label class="lb">Nom complet</label><div><input id="pi-nom"></div></div>
-    <div class="row"><label class="lb">Adresse e-mail</label><div><input id="pi-mail" autocomplete="username"></div></div>
-    <div class="row"><label class="lb">Mot de passe</label><div><input id="pi-mdp" type="password" autocomplete="new-password"></div></div>
-    <div id="pi-err" class="hint" style="color:var(--red)"></div>
-    <div class="actions"><button class="b pri" id="pi-go">Créer mon compte</button></div>
-    <p class="hint" style="margin-top:14px">Déjà inscrit ? <button id="pi-vers-login" style="font:inherit;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">Se connecter</button></p>
-  </div>`;
-
-  if(mode==='login'){
-    const go=async()=>{
-      const mail=document.getElementById('pl-mail').value.trim(), mdp=document.getElementById('pl-mdp').value;
-      const c=COMPTES.find(x=>x.nom.toLowerCase()===mail.toLowerCase() && x.mdp===mdp);
-      if(!c){ document.getElementById('pl-err').textContent='Adresse e-mail ou mot de passe incorrect.'; return; }
-      UTILISATEUR={id:c.id,nom:c.nom,role:c.role,nomComplet:c.nomComplet}; await saveSession(); PUBLIC_AUTH=null; sync();
-    };
-    document.getElementById('pl-go').onclick=go;
-    document.getElementById('pl-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
-    document.getElementById('pl-vers-inscr').onclick=()=>{ PUBLIC_AUTH='inscription'; sync(); };
-    document.getElementById('pl-mail').focus();
-  } else {
-    const go=async()=>{
-      const nomC=document.getElementById('pi-nom').value.trim(), mail=document.getElementById('pi-mail').value.trim(), mdp=document.getElementById('pi-mdp').value;
-      const err=document.getElementById('pi-err');
-      if(!nomC||!mail||!mdp){ err.textContent='Tous les champs sont requis.'; return; }
-      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){ err.textContent='Adresse e-mail invalide.'; return; }
-      if(mdp.length<6){ err.textContent='Le mot de passe doit compter au moins 6 caractères.'; return; }
-      if(COMPTES.some(x=>x.nom.toLowerCase()===mail.toLowerCase())){ err.textContent='Un compte existe déjà avec cette adresse.'; return; }
-      const c={id:idCompte(),nom:mail,role:ROLE_PUBLIC,mdp,nomComplet:nomC};
-      COMPTES.push(c); await saveAuth();
-      UTILISATEUR={id:c.id,nom:c.nom,role:c.role,nomComplet:nomC}; await saveSession(); PUBLIC_AUTH=null; sync();
-    };
-    document.getElementById('pi-go').onclick=go;
-    document.getElementById('pi-vers-login').onclick=()=>{ PUBLIC_AUTH='login'; sync(); };
-    document.getElementById('pi-nom').focus();
-  }
+// ══════════════════════════════════════════════════ SAUVEGARDE PERSONNELLE (mode memoryOnly)
+// Sur ce déploiement, sans back-end, l'export manuel est la seule copie qui survit à la fermeture
+// de l'onglet dès que l'enregistrement automatique échoue (voir save()). Le bouton reste visible
+// tant que memoryOnly est actif ; il vire à l'ochre dès qu'un changement n'a pas encore été exporté.
+function nomExportTravail(){ const d=new Date(), p=x=>String(x).padStart(2,'0');
+  return `atelier-jo-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`; }
+function exporterTravail(){
+  tele(nomExportTravail(), JSON.stringify(DB,null,2), 'application/json');
+  DIRTY=false; majSauvegarde();
 }
+function majSauvegarde(){
+  const b=document.getElementById('sauveTravail'); if(!b) return;
+  b.hidden=!memoryOnly;
+  b.classList.toggle('urgent', DIRTY);
+  b.classList.toggle('pri', !DIRTY);
+  b.textContent = DIRTY?'Enregistrer le travail — non exporté':'Enregistrer le travail';
+  b.onclick=exporterTravail;
+}
+window.addEventListener('beforeunload', e=>{
+  if(memoryOnly && DIRTY){ e.preventDefault(); e.returnValue=''; }
+});
 
 // ══════════════════════════════════════════════════ NAVIGATION
 // L'atelier s'ouvre sur le catalogue public (ESPACE='opac' par défaut, voir plus haut) : l'accès
@@ -465,14 +440,18 @@ document.addEventListener('click',()=>{ if(MENU_PRO){ MENU_PRO=false; majNavAuth
 document.querySelectorAll('[data-l]').forEach(b=> b.onclick=()=>{ LANG=b.dataset.l; sync(); });
 function majAuthUI(){
   const el=document.getElementById('compte'); if(!el) return;
-  if(!UTILISATEUR){
-    el.innerHTML = ESPACE==='opac' ? `<button id="connexionPub" style="font:inherit;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">Se connecter / S'inscrire</button>` : '';
-    const cx=document.getElementById('connexionPub'); if(cx) cx.onclick=()=>{ PUBLIC_AUTH='login'; sync(); scrollTo(0,0); };
-    return;
-  }
+  if(!UTILISATEUR){ el.innerHTML=''; return; }
   const lib=(ROLES.find(r=>r[0]===UTILISATEUR.role)||[,UTILISATEUR.role])[1];
   el.innerHTML=`${esc(UTILISATEUR.nomComplet||UTILISATEUR.nom)} · <span>${esc(tDict(lib))}</span> <button id="deco" style="font:inherit;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0;margin-left:6px">${t('Se déconnecter','Log out')}</button>`;
   document.getElementById('deco').onclick=logout;
+}
+// Rappel affiché dans tout l'espace Administration : l'identification (priorité 2B) est déclarative,
+// pas un contrôle d'accès réel — voir renderLogin(). Doit rester visible partout dans cet espace.
+function majAvisRole(){
+  const el=document.getElementById('avisRole'); if(!el) return;
+  const dans=ESPACE==='admin' && UTILISATEUR && UTILISATEUR.role!==ROLE_PUBLIC;
+  el.hidden=!dans;
+  if(dans) el.textContent=`Connecté(e) comme ${UTILISATEUR.nomComplet||UTILISATEUR.nom} · ${(ROLES.find(r=>r[0]===UTILISATEUR.role)||[,UTILISATEUR.role])[1]} — identification déclarative, sans mot de passe : ce n'est pas un contrôle d'accès sécurisé.`;
 }
 function sync(){
   document.querySelectorAll('[data-e]').forEach(b=> b.setAttribute('aria-pressed', b.dataset.e===ESPACE));
@@ -480,6 +459,8 @@ function sync(){
   document.documentElement.lang=LANG;
   majAuthUI();
   majNavAuth();
+  majSauvegarde();
+  majAvisRole();
 
   if(ESPACE==='admin' && (!UTILISATEUR || UTILISATEUR.role===ROLE_PUBLIC)){
     if(UTILISATEUR){ ESPACE='opac'; VUE=TABS.opac[0][0]; return sync(); }
@@ -497,10 +478,9 @@ function sync(){
   document.getElementById('tabs').innerHTML=onglets.map(([k,l])=>{
     const b = (k==='saisie'&&DB.queue.length) ? ` <b style="font-family:var(--mono);font-size:11px;background:var(--ochre);color:#fff;border-radius:9px;padding:1px 7px;margin-left:5px;font-weight:500">${DB.queue.length}</b>` : '';
     return `<button data-v="${k}" aria-current="${VUE===k}">${l}${b}</button>`;}).join('');
-  document.querySelectorAll('#tabs button').forEach(b=> b.onclick=()=>{ VUE=b.dataset.v; ouvert=null; PUBLIC_AUTH=null; sync(); });
+  document.querySelectorAll('#tabs button').forEach(b=> b.onclick=()=>{ VUE=b.dataset.v; ouvert=null; sync(); });
   document.getElementById('who').textContent = DB.config ? DB.config.annotateur+' · '+DB.config.mode : DB.notices.length+' notice(s)';
-  if(ESPACE==='opac' && PUBLIC_AUTH && !UTILISATEUR) renderAuthPublic();
-  else ({versement:renderVersement,tele:renderTele,saisie:renderSaisie,controle:renderControle,mesures:renderMesures,donnees:renderDonnees,comptes:renderComptes,commandes:renderCommandes,
+  ({versement:renderVersement,tele:renderTele,saisie:renderSaisie,controle:renderControle,mesures:renderMesures,donnees:renderDonnees,commandes:renderCommandes,
     accueil:renderAccueil,rech:renderRech,classement:renderClassement,instr:renderInstr,chrono:renderChrono,thes:renderThes,assist:renderAssistant,
     integ:renderInteg,normes:renderNormes,cmd:renderCmd,mescommandes:renderMesCommandes})[VUE]();
   traduireDOM();
@@ -523,7 +503,7 @@ const tDict=v=>(LANG==='en'&&EN[nk(v)])||v||'';
 const nk=s=>String(s).replace(/[\u2019\u02BC]/g,"'").replace(/\s+/g,' ').trim();
 const EN={
 "Administration":"Administration","Catalogue public":"Public catalogue",
-"Versement":"Accession","Numériser":"Digitize","Numériser et traiter":"Digitize and process","Saisie":"Description","Mesures":"Metrics","Données":"Data","Comptes":"Accounts",
+"Versement":"Accession","Numériser":"Digitize","Numériser et traiter":"Digitize and process","Saisie":"Description","Mesures":"Metrics","Données":"Data",
 "Rechercher":"Search","Accueil":"Home","Les fonds":"Holdings",
 "État du dépouillement":"State of indexing","Répartition chronologique":"Chronological distribution",
 "Dernières notices validées":"Latest validated descriptions","Pièces décrites":"Items described",
@@ -613,7 +593,7 @@ const EN={
 
 "Prescriptions de numérisation":"Digitization specifications","Identification du lot":"Batch identification",
 "Contenu du lot":"Batch contents","Établir le bordereau de versement":"Issue the transfer slip",
-"Envoyer au traitement":"Send for processing","Opérateur":"Operator","Matériel":"Equipment",
+"Envoyer à la numérisation":"Send for digitization","Opérateur":"Operator","Matériel":"Equipment",
 "Résolution":"Resolution","Format de conservation":"Preservation format","Format de diffusion":"Access format",
 "Colorimétrie":"Colour settings","Convention de nommage":"File naming convention",
 "Désigner le dossier du scanner":"Select the scanner folder","Vider le lot":"Clear the batch",
@@ -1067,11 +1047,13 @@ async function chargerLot(files){
   // S'ajoute au lot déjà chargé — ne le remplace pas — pour permettre de compléter un lot en plusieurs passes.
   const connus=new Set(LOT.map(x=>x.nom+' '+x.taille));
   const F=[...files].filter(f=>!connus.has(f.name+' '+f.size)).sort(triNaturel);
+  let dernierRendu=0;
   for(const f of F){
     LOT.push({rang:0,nom:f.name,taille:f.size,type:f.type||'inconnu',
       empreinte:await empreinteFichier(f),fichier:f});
     LOT.sort(triNaturelLot); LOT.forEach((x,i)=>x.rang=i+1);
-    renderVersement();
+    const maintenant=performance.now();
+    if(maintenant-dernierRendu>=150){ dernierRendu=maintenant; renderVersement(); }
   }
   lotEnCours=false; renderVersement();
 }
@@ -1142,7 +1124,7 @@ function renderVersement(){
       <td class="mono" style="font-size:11px">${x.empreinte?esc(x.empreinte.slice(0,16)+'…'):'—'}</td></tr>`).join('')}</table>
     <div class="actions">
       <button class="b pri" id="bord">Établir le bordereau de versement</button>
-      <button class="b" id="trait">Envoyer au traitement</button>
+      <button class="b" id="trait">Envoyer à la numérisation</button>
     </div>
     <p class="hint">L'empreinte est prise au moment de la reprise : c'est le premier maillon de la chaîne de conservation au sens d'InterPARES. Toute altération ultérieure d'un fichier devient détectable.</p></div>`:''}
 
@@ -1160,6 +1142,7 @@ function renderVersement(){
   const v=document.getElementById('vider'); if(v) v.onclick=()=>{LOT=[];renderVersement()};
   const bp=document.getElementById('m-bpdf');
   if(bp) bp.onchange=e=>{ const f=e.target.files[0]; if(!f) return;
+    if(f.size>10*1024*1024){ alert(`Ce fichier fait ${octets(f.size)} : la limite pour le bordereau joint est de 10 Mo. Réduisez la résolution du scan ou compressez le PDF avant de le joindre.`); bp.value=''; return; }
     const r=new FileReader(); r.onload=()=>{ LOT_META.bordereauPdf={nom:f.name,taille:f.size,dataUrl:r.result}; renderVersement(); };
     r.readAsDataURL(f); };
   const bx=document.getElementById('bpdf-x'); if(bx) bx.onclick=()=>{ LOT_META.bordereauPdf=null; renderVersement(); };
@@ -1170,7 +1153,6 @@ function renderVersement(){
   const b=document.getElementById('bord'); if(b) b.onclick=bordereau;
   const t=document.getElementById('trait');
   if(t) t.onclick=()=>{ LOT_FILES=LOT.map(x=>x.fichier);
-    if(LOT_META.numero_jo && !(DB.config&&DB.config.numero_jo)) LOT_META.numero_jo=LOT_META.numero_jo;
     VUE='tele'; sync(); scrollTo(0,0); };
 }
 
@@ -1198,6 +1180,7 @@ th{background:#eee;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
 <dt>Matériel</dt><dd>${esc(LOT_META.materiel||'non renseigné')}</dd>
 <dt>Date de versement</dt><dd>${new Date().toLocaleDateString('fr-FR')}</dd>
 <dt>Volume</dt><dd>${LOT.length} fichier(s), ${octets(LOT.reduce((s,x)=>s+x.taille,0))}</dd>
+${LOT_META.bordereauPdf?`<dt>Bordereau papier joint</dt><dd>${esc(LOT_META.bordereauPdf.nom)} (${octets(LOT_META.bordereauPdf.taille)}), signé et scanné, conservé avec la séance</dd>`:''}
 </dl></div>
 
 <h2>Prescriptions de numérisation appliquées</h2>
@@ -1464,7 +1447,7 @@ async function reconnaitreLocal(fichiers,garderJournal){
   try{
     for(const f of fichiers){
       if(f.type==='application/pdf'){
-        if(!window.pdfjsLib) throw new Error('pdf.min.js absent du dossier');
+        if(!window.pdfjsLib) throw new Error("la bibliothèque de lecture PDF n'a pas pu être chargée — le fichier pdf.min.js est absent à côté de cette page, ou une restriction réseau du poste (pare-feu, filtrage) a bloqué son téléchargement depuis le CDN de repli");
         const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
         for(let p=1;p<=pdf.numPages;p++){
           const pg=await pdf.getPage(p);
@@ -1595,20 +1578,23 @@ async function reconnaitreOCR(fichiers){
   enCours=false; renderTele();
 }
 
-// ══════════════════════════════════════════════════ 1. TRAITEMENT
+// ══════════════════════════════════════════════════ 1. NUMÉRISATION
 let TROUVE=[],JOURNAL=[],enCours=false,FICHIER='',STREAM=null,CAPTURES=[];
+// Fichier local d'abord (servi avec la page elle-même, insensible au pare-feu du poste) ; le CDN ne
+// sert que de repli si le fichier local est absent du dossier — jamais l'inverse.
 if(window.pdfjsLib) (async function(){
-  const url='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  try{
-    const r=await fetch(url);
-    if(!r.ok) throw 0;
-    const code=await r.text();
-    pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));
-    window.PDFOK=true;
-  }catch(e){
-    pdfjsLib.GlobalWorkerOptions.workerSrc=url;
-    window.PDFOK=false;
+  const cdn='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  for(const url of ['pdf.worker.min.js',cdn]){
+    try{
+      const r=await fetch(url);
+      if(!r.ok) throw 0;
+      const code=await r.text();
+      pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));
+      window.PDFOK=true; return;
+    }catch(e){}
   }
+  pdfjsLib.GlobalWorkerOptions.workerSrc=cdn;
+  window.PDFOK=false;
 })();
 
 async function camOn(){
@@ -1637,12 +1623,6 @@ function renderTele(){
     <input type="file" id="cam" accept="image/*" capture="environment" multiple ${enCours?'disabled':''}>
     <p class="hint">Sur téléphone ou tablette, ouvre directement l'appareil photo.</p>
 
-    <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:18px 0 8px">Numériser à l'écran</div>
-    ${STREAM?`<video id="vid" playsinline muted style="width:100%;max-height:340px;background:#000;border-radius:5px;object-fit:contain"></video>
-      <div class="actions"><button class="b pri" id="snap">Numériser la page</button><button class="b" id="off">Fermer</button></div>`
-    :`<div class="actions"><button class="b" id="on">Numériser une page</button></div>`}
-    <p class="hint">Utilise la caméra de l'appareil. Convient à l'indexation ; pour un master de conservation, il faut un scanner à plat.</p>
-    ${CAPTURES.length?`<p class="hint" style="color:var(--ochre)">${CAPTURES.length} page(s) numérisée(s), prêtes pour le traitement. <button class="b" id="vidc" style="padding:2px 9px;font-size:12px;margin-left:6px">Effacer</button></p>`:''}
 
     <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:18px 0 8px">Texte déjà transcrit</div>
     <textarea id="colle" placeholder="Collez ici le texte d'un numéro issu de votre logiciel de reconnaissance de caractères" style="min-height:70px;font-size:13.5px">${esc(TEXTECOLLE)}</textarea>
@@ -1871,9 +1851,13 @@ async function traiter(fichiers){
 
 // ══════════════════════════════════════════════════ 2. SAISIE
 let propose=null,EXTRA=null;
+// Reprise d'une fiche existante (brouillon, y compris rejetée) pour la modifier plutôt que d'en créer une nouvelle.
+let EDIT_NOTICE_ID=null;
+function ouvrirModif(id){ EDIT_NOTICE_ID=id; VUE='saisie'; sync(); scrollTo(0,0); }
 function renderSaisie(){
   if(!DB.config) return renderConfig();
   const c=DB.config, ass=c.mode==='assisté';
+  const enModif = EDIT_NOTICE_ID && DB.notices.find(n=>n.id===EDIT_NOTICE_ID);
   let rows='';
   for(const f of FIELDS){
     if(f[0]==='g'){ rows+=`<div class="grp-t">${esc(f[1])}</div>`; continue; }
@@ -1895,33 +1879,39 @@ function renderSaisie(){
   }
   const proposVide = ass && DB.queue.length && !FIDS.some(k=>DB.queue[0][k]);
   app.innerHTML=`
-  ${ass?`<div class="card"><h2>2 — Propositions à valider</h2>
+  ${enModif?`<div class="card" style="border-left:3px solid var(--ochre)"><h2>Modification d'une fiche existante</h2>
+    ${enModif.motifControle?`<p class="sub" style="color:var(--red)">Cette fiche a été rejetée par le contrôle qualité. Motif : <b>${esc(enModif.motifControle)}</b></p>`:''}
+    <p class="sub" style="margin-bottom:0">Corrigez la fiche ci-dessous puis soumettez-la à nouveau. <button id="annulerModif" style="font:inherit;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0">Annuler la modification et revenir à une fiche vierge</button></p></div>`:''}
+  ${ass&&!enModif?`<div class="card"><h2>2 — Propositions à valider</h2>
     <p class="sub">${DB.queue.length?`${DB.queue.length} proposition(s) en attente, issues de l'onglet « Numériser et traiter ». La fiche ci-dessous est déjà pré-remplie ; elles défilent une par une à chaque enregistrement.`:'La file est vide. Pour obtenir des propositions à partir d\'un PDF, passez par l\'onglet « Numériser et traiter » : c\'est la voie normale, celle-ci ne sert qu\'à importer un lot déjà préparé (voir ci-dessous).'}</p>
     ${proposVide?`<div class="warn"><b>La proposition en tête de file ne contient aucun champ reconnu</b> : la fiche ci-dessous s'ouvre donc vierge, ce n'est pas une anomalie de la saisie. Cliquez sur « Écarter » pour passer à la suivante, ou « Vider la file » si tout le lot est dans ce cas.</div>`:''}
     <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:14px 0 6px">Importer un fichier de propositions déjà préparé</div>
     <input type="file" id="lot" accept=".json">
     <p class="hint">Pas pour un PDF : pour lire un PDF ou un scan, utilisez l'onglet « Numériser et traiter ». Ce champ importe un fichier JSON de propositions déjà produit ailleurs — par exemple exporté par un collègue depuis « Numériser et traiter ».</p>
     ${DB.queue.length?`<div class="actions"><button class="b" id="vider">Vider la file</button></div>`:''}</div>`
-  :DB.queue.length?`<div class="card" style="border-left:3px solid var(--ochre)"><h2>Une file attend</h2>
+  :(DB.queue.length&&!enModif)?`<div class="card" style="border-left:3px solid var(--ochre)"><h2>Une file attend</h2>
     <p class="sub" style="margin-bottom:0">${DB.queue.length} proposition(s) issues du téléversement ne seront pas utilisées : cette séance est en mode manuel, la fiche s'ouvre vierge. Pour les dérouler, cliquez sur « Changer de séance » et choisissez le mode assisté. La file reste intacte d'ici là.</p></div>`:''}
   <div class="fiche">
     <div class="fh2"><div class="cote"><b>${esc(c.serie)}</b><br>${esc(c.numero_jo||'numéro non précisé')} · ${esc(c.cote||'cote non précisée')}<br>archiviste : ${esc(c.annotateur)}</div>
       <button class="chipm ${ass?'m-assiste':'m-manuel'}" id="modeToggle" style="font:inherit;border:0;cursor:pointer" title="Cliquer pour basculer entre saisie manuelle et validation assistée">${ass?'validation assistée':'saisie manuelle'} ⇄</button></div>
     <div class="grp">${rows}</div>
     <div class="actions" style="padding:14px 20px;border-top:1px solid var(--ruleS);background:#FBFBF9;margin:0">
-      <button class="b pri" id="sv">Enregistrer et envoyer au contrôle</button>
-      <button class="b" id="sk">Écarter</button><button class="b" id="cf">Changer de séance</button>
+      <button class="b" id="svb">Enregistrer comme brouillon</button>
+      <button class="b pri" id="sv">Soumettre pour validation</button>
+      ${enModif?'':'<button class="b" id="sk">Écarter</button>'}<button class="b" id="cf">Changer de séance</button>
       <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink3)">${DB.notices.length} notice(s) au catalogue</span></div>
   </div>`;
   propose=null;
   document.getElementById('cf').onclick=()=>{DB.config=null;save();renderConfig()};
-  document.getElementById('sk').onclick=async()=>{ if(DB.queue.length){DB.queue.shift();await save()} renderSaisie(); };
-  document.getElementById('sv').onclick=enregistrer;
+  const skB=document.getElementById('sk'); if(skB) skB.onclick=async()=>{ if(DB.queue.length){DB.queue.shift();await save()} renderSaisie(); };
+  document.getElementById('sv').onclick=()=>enregistrer(true);
+  document.getElementById('svb').onclick=()=>enregistrer(false);
+  const am=document.getElementById('annulerModif'); if(am) am.onclick=()=>{ EDIT_NOTICE_ID=null; renderSaisie(); };
   document.getElementById('modeToggle').onclick=async()=>{
     if(!confirm(`Passer en mode ${ass?'manuel':'assisté'} ? La fiche en cours, si elle n'est pas enregistrée, sera perdue.`)) return;
     DB.config.mode=ass?'manuel':'assisté'; await save(); renderSaisie();
   };
-  if(ass){
+  if(ass&&!enModif){
     document.getElementById('lot').onchange=lotFichier;
     const v=document.getElementById('vider');
     if(v) v.onclick=async()=>{ if(confirm('Vider la file ?')){DB.queue=[];await save();renderSaisie()} };
@@ -1929,7 +1919,9 @@ function renderSaisie(){
   FIDS.forEach(id=>{ const e=document.getElementById('f-'+id);
     e.addEventListener('input',()=>marquer(id)); e.addEventListener('change',()=>marquer(id)); });
   tStart();
-  if(ass&&DB.queue.length) remplir(DB.queue[0]);
+  if(enModif){
+    FIDS.forEach(id=>{ const v=enModif[id]; if(v!=null) document.getElementById('f-'+id).value=Array.isArray(v)?v.join(', '):v; });
+  } else if(ass&&DB.queue.length) remplir(DB.queue[0]);
 }
 function renderConfig(){
   app.innerHTML=`<div class="card"><h2>Ouvrir une séance</h2>
@@ -1944,7 +1936,8 @@ function renderConfig(){
   document.getElementById('c-go').onclick=async()=>{
     const an=document.getElementById('c-an').value.trim(); if(!an) return document.getElementById('c-an').focus();
     DB.config={annotateur:an,mode:document.getElementById('c-mo').value,serie:document.getElementById('c-se').value,
-      numero_jo:document.getElementById('c-nu').value.trim(),cote:document.getElementById('c-co').value.trim()};
+      numero_jo:document.getElementById('c-nu').value.trim(),cote:document.getElementById('c-co').value.trim(),
+      bordereauPdf:LOT_META.bordereauPdf||null};
     await save(); sync();
   };
 }
@@ -1952,10 +1945,13 @@ function lotFichier(e){ const f=e.target.files[0]; if(!f) return;
   const r=new FileReader(); r.onload=async()=>{ try{ const o=JSON.parse(r.result);
     const items=Array.isArray(o)?o:[o];
     // Un fichier au mauvais format pousserait des propositions vides : la fiche assistée s'ouvrirait
-    // vierge sans que rien ne l'explique. On vérifie qu'au moins un champ attendu est effectivement rempli.
-    const valides=items.filter(it=>it&&typeof it==='object'&&FIDS.some(k=>it[k]));
-    if(!valides.length){ alert("Ce fichier ne contient aucune proposition reconnaissable : aucun des champs attendus (intitulé, type, numéro…) n'a été trouvé. Vérifiez qu'il s'agit bien d'un export de propositions, produit depuis l'onglet « Numériser et traiter »."); return; }
-    if(valides.length<items.length) alert(`${items.length-valides.length} élément(s) ignoré(s) : ils ne correspondent à aucun champ attendu.`);
+    // vierge sans que rien ne l'explique. On exige au moins un des champs structurants minimaux —
+    // un objet qui n'a, par exemple, que des descripteurs mais ni type, ni intitulé, ni numéro n'est
+    // pas une proposition de notice exploitable — sans faire échouer l'import pour les autres entrées.
+    const valides=items.filter(it=>it&&typeof it==='object'&&(it.type||it.intitule_fr||it.numero));
+    const ignorees=items.length-valides.length;
+    if(!valides.length){ alert("Ce fichier ne contient aucune proposition reconnaissable : aucun objet ne porte de type, d'intitulé (intitule_fr) ou de numéro. Vérifiez qu'il s'agit bien d'un export de propositions, produit depuis l'onglet « Numériser et traiter »."); return; }
+    if(ignorees) alert(`${ignorees} entrée(s) ignorée(s), structure non reconnue : ni type, ni intitulé (intitule_fr), ni numéro.`);
     DB.queue.push(...valides); await save(); renderSaisie();
   }catch(x){ alert("Fichier JSON illisible."); } };
   r.readAsText(f); }
@@ -1969,14 +1965,31 @@ function marquer(id){ if(!propose) return;
   const w=document.getElementById('w-'+id), cur=document.getElementById('f-'+id).value, ch=cur!==propose[id];
   w.className='fld'+(ch?' corr':(propose[id]?' prop':''));
   w.querySelector('.tagmark').textContent=ch?'corrigé':(propose[id]?'proposé automatiquement':''); }
-async function enregistrer(){
+// Statut d'une fiche : brouillon (visible seulement à son auteur et aux rôles internes) → à_valider
+// (l'auteur la soumet explicitement, ce n'est jamais automatique) → validée (par un contrôleur ou
+// l'admin) ou repasse en brouillon avec un motif si le contrôleur la rejette. Seules les fiches
+// « validee » apparaissent au catalogue public — voir OPAC().
+async function enregistrer(soumettre){
   const d=tStop(), c=DB.config, v={};
   FIDS.forEach(id=> v[id]=document.getElementById('f-'+id).value.trim());
   if(!v.type&&!v.intitule){ if(!confirm("Ni type ni intitulé renseignés. Enregistrer ?")){tResume();return} }
+  const trace={nom:(UTILISATEUR&&(UTILISATEUR.nomComplet||UTILISATEUR.nom))||c.annotateur,role:UTILISATEUR&&UTILISATEUR.role||'','date':new Date().toISOString()};
+  const existante = EDIT_NOTICE_ID && DB.notices.find(n=>n.id===EDIT_NOTICE_ID);
+  if(existante){
+    Object.assign(existante,v,{duree_s:(existante.duree_s||0)+d,
+      statut:soumettre?'a_valider':'brouillon',modifiePar:trace,
+      dateSoumission:soumettre?new Date().toISOString():existante.dateSoumission,
+      // Le motif et le nom du contrôleur ne sont effacés qu'à la resoumission effective : tant que la
+      // fiche reste en brouillon, l'auteur doit continuer à voir pourquoi elle a été rejetée.
+      motifControle:soumettre?null:existante.motifControle,
+      controleur:soumettre?null:existante.controleur,dateControle:soumettre?null:existante.dateControle});
+    EDIT_NOTICE_ID=null; ANCRAGE=null; await save(); VUE='donnees'; sync(); return;
+  }
   DB.notices.push({id:'N'+Date.now()+Math.floor(Math.random()*99),annotateur:c.annotateur,mode:c.mode,
     serie:c.serie,numero_jo:c.numero_jo,cote:c.cote,...v,duree_s:d,texte:(EXTRA&&EXTRA._texte)||'',image:(EXTRA&&EXTRA._image)||'',
     champs_corriges:propose?FIDS.filter(k=>v[k]!==propose[k]):[],proposition:propose||null,horodatage:new Date().toISOString(),
-    statut:'a_controler',controleur:null,dateControle:null});
+    auteur:trace,statut:soumettre?'a_valider':'brouillon',dateSoumission:soumettre?new Date().toISOString():null,
+    controleur:null,dateControle:null,motifControle:null});
   EXTRA=null;
   if(DB.queue.length) DB.queue.shift();
   ANCRAGE=null; await save(); renderSaisie();
@@ -1988,7 +2001,7 @@ async function enregistrer(){
 const lireChamp=v=>{ v=(v==null?'':String(v)).trim(); return v?esc(v).replace(/\n/g,'<br>'):'<span style="color:var(--ink3)">—</span>'; };
 let refusNotice=null;
 function renderControle(){
-  const attente=DB.notices.filter(n=>n.statut==='a_controler');
+  const attente=DB.notices.filter(n=>n.statut==='a_valider');
   if(!attente.length){ refusNotice=null; return vide("Aucune fiche en attente de contrôle."); }
   const n=attente[0];
   let rows='';
@@ -2023,7 +2036,7 @@ function renderControle(){
   </div>`;
   const vb=document.getElementById('valider-fiche');
   if(vb) vb.onclick=async()=>{
-    n.statut='validee'; n.controleur=UTILISATEUR.nomComplet||UTILISATEUR.nom; n.dateControle=new Date().toISOString();
+    n.statut='validee'; n.controleur=UTILISATEUR.nomComplet||UTILISATEUR.nom; n.dateControle=new Date().toISOString(); n.motifControle=null;
     await save(); renderControle();
   };
   const rb=document.getElementById('refuser-fiche'); if(rb) rb.onclick=()=>{ refusNotice=n.id; renderControle(); };
@@ -2032,7 +2045,9 @@ function renderControle(){
   if(ro) ro.onclick=async()=>{
     const motif=document.getElementById('motif-controle').value.trim();
     if(!motif){ alert('Un motif est requis pour refuser une fiche.'); return; }
-    n.statut='refusee'; n.controleur=UTILISATEUR.nomComplet||UTILISATEUR.nom; n.dateControle=new Date().toISOString(); n.motifControle=motif;
+    // Une fiche rejetée repasse en brouillon (et non dans un statut « refusée » à part) : l'auteur
+    // la retrouve dans ses brouillons avec le motif affiché, la corrige et la resoumet.
+    n.statut='brouillon'; n.controleur=UTILISATEUR.nomComplet||UTILISATEUR.nom; n.dateControle=new Date().toISOString(); n.motifControle=motif;
     refusNotice=null; await save(); renderControle();
   };
 }
@@ -2090,27 +2105,32 @@ function renderMesures(){
 // ══════════════════════════════════════════════════ 4. DONNÉES
 function renderDonnees(){
   const N=DB.notices;
-  const stg=UTILISATEUR.role==='stagiaire';
+  const stg=UTILISATEUR.role==='stagiaire', admin=UTILISATEUR.role==='admin';
+  const mien=n2=> n2.auteur && (n2.auteur.nom===(UTILISATEUR.nomComplet||UTILISATEUR.nom));
   app.innerHTML=`
   <div class="card"><h2>Exporter</h2><p class="sub">Exportez à chaque fin de séance et transmettez le fichier au responsable (dossier partagé, e-mail) : c'est votre sauvegarde, et c'est ainsi que votre travail rejoint le catalogue commun.</p>
     <div class="actions"><button class="b pri" id="ej">Export JSON</button><button class="b" id="ec">Export CSV</button></div></div>
-  ${stg?'':`
+  ${admin?`
   <div class="card"><h2>Importer et fusionner</h2>
     <p class="sub">Chargez le fichier exporté par un stagiaire ou un autre archiviste pour l'ajouter au catalogue commun. Les fiches déjà présentes ne sont pas dupliquées.</p>
     <input type="file" id="imp" accept=".json"><div id="im" class="hint"></div></div>
   <div class="card"><h2>Jeu de démonstration</h2>
     <p class="sub">Huit notices du JO spécial n° 4 du 1<sup>er</sup> mars 2024, pour démarrer un cours sur un catalogue déjà alimenté.</p>
     <div class="actions"><button class="b" id="seed">Charger les 8 notices</button>
-      ${N.length?`<button class="b" id="wipe" style="color:var(--red)">Tout effacer</button>`:''}</div></div>`}
+      ${N.length?`<button class="b" id="wipe" style="color:var(--red)">Tout effacer</button>`:''}</div></div>`:''}
   <div class="card"><h2>Notices enregistrées</h2>
-    ${N.length?`<table><tr><th>Archiviste</th><th>Mode</th><th>Type</th><th>Intitulé</th><th>Statut</th><th>Durée</th>${stg?'':'<th></th>'}</tr>
+    ${N.length?`<table><tr><th>Archiviste</th><th>Mode</th><th>Type</th><th>Intitulé</th><th>Statut</th><th>Durée</th><th></th></tr>
     ${N.slice().reverse().map(n=>{
-      const statut=n.statut==='a_controler'?`<span style="color:var(--ochre)">à contrôler</span>`
-        :n.statut==='refusee'?`<span style="color:var(--red)" title="${esc(n.motifControle||'')}">refusée${n.motifControle?' — '+esc(n.motifControle.slice(0,40)):''}</span>`
-        :`<span style="color:#255536">validée</span>`;
+      const statut=n.statut==='a_valider'?`<span style="color:var(--ochre)">à valider</span>`
+        :n.statut==='validee'?`<span style="color:#255536">validée</span>`
+        :n.motifControle?`<span style="color:var(--red)" title="${esc(n.motifControle)}">brouillon — rejetée : ${esc(n.motifControle.slice(0,40))}</span>`
+        :`<span style="color:var(--ink3)">brouillon</span>`;
+      const modifiable = n.statut!=='validee' && (admin||mien(n));
       return `<tr><td>${esc(n.annotateur)}</td><td>${esc(tMode(n.mode))}</td><td>${esc(tType(n.type))||'—'}</td>
       <td>${esc((LANG==='en'?(n.intitule_en||n.intitule_fr):(n.intitule_fr||n.intitule_en))||n.intitule||'').slice(0,52)||'—'}</td><td style="font-size:12.5px">${statut}</td><td class="num">${fmt(n.duree_s||0)}</td>
-      ${stg?'':`<td><button class="b" style="padding:3px 9px;font-size:12px" data-del="${n.id}">Supprimer</button></td>`}</tr>`;}).join('')}</table>`
+      <td style="white-space:nowrap">${modifiable?`<button class="b" style="padding:3px 9px;font-size:12px" data-mod="${n.id}">Modifier</button>`:''}
+        ${modifiable&&n.statut==='brouillon'?`<button class="b" style="padding:3px 9px;font-size:12px;margin-left:4px" data-soum="${n.id}">Soumettre</button>`:''}
+        ${stg?'':`<button class="b" style="padding:3px 9px;font-size:12px;margin-left:4px" data-del="${n.id}">Supprimer</button>`}</td></tr>`;}).join('')}</table>`
     :'<p class="empty">Aucune notice.</p>'}</div>`;
 
   const jour=()=>new Date().toISOString().slice(0,10);
@@ -2138,6 +2158,14 @@ function renderDonnees(){
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
     if(!confirm('Supprimer cette notice ?')) return;
     DB.notices=DB.notices.filter(x=>x.id!==b.dataset.del); ANCRAGE=null; await save(); renderDonnees(); });
+  document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{
+    DB.config=DB.config||{annotateur:UTILISATEUR.nomComplet||UTILISATEUR.nom,mode:'manuel',serie:SERIES[0],numero_jo:'',cote:''};
+    ouvrirModif(b.dataset.mod); });
+  document.querySelectorAll('[data-soum]').forEach(b=>b.onclick=async()=>{
+    const n=DB.notices.find(x=>x.id===b.dataset.soum); if(!n) return;
+    n.statut='a_valider'; n.dateSoumission=new Date().toISOString(); n.motifControle=null;
+    await save(); renderDonnees();
+  });
 }
 function tele(nom,contenu,mime){ const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([contenu],{type:mime})); a.download=nom; a.click(); URL.revokeObjectURL(a.href); }
@@ -2271,60 +2299,6 @@ ${items.map(n=>`<h2>${esc(tType(n.type))}${n.numero?' n° '+esc(n.numero):''} �
   const w=window.open('','_blank');
   if(!w){ alert("Le navigateur a bloqué l'ouverture de la fenêtre d'impression. Autorisez les fenêtres pop-up pour ce site, puis réessayez."); return; }
   w.document.write(doc); w.document.close(); w.focus(); w.print();
-}
-
-// ══════════════════════════════════════════════════ 5. COMPTES (admin seulement)
-let editCompte=null;
-function renderComptes(){
-  app.innerHTML=`
-  <div class="card"><h2>Comptes</h2>
-    <p class="sub">Comptes de connexion à l'espace Administration. Rappel : ceci reste une connexion légère côté prototype — identifiants et mots de passe sont stockés tels quels dans ce fichier, ce n'est pas une sécurité réelle.</p>
-    <table><tr><th>Identifiant</th><th>Rôle</th><th></th></tr>
-    ${COMPTES.map(c=> c.id===editCompte ? `<tr><td><input id="ec-nom" value="${esc(c.nom)}" style="width:100%"></td>
-        <td><select id="ec-role">${ROLES.map(([v,l])=>`<option value="${v}" ${v===c.role?'selected':''}>${esc(l)}</option>`).join('')}</select></td>
-        <td><input id="ec-mdp" type="password" placeholder="nouveau mot de passe (facultatif)" style="width:100%"></td></tr>
-        <tr><td colspan="3" style="padding-top:0"><button class="b pri" style="padding:3px 9px;font-size:12px" id="ec-ok">Enregistrer</button>
-        <button class="b" style="padding:3px 9px;font-size:12px;margin-left:4px" id="ec-no">Annuler</button></td></tr>`
-      : `<tr><td>${esc(c.nom)}</td><td>${esc((ROLES.find(r=>r[0]===c.role)||[,c.role])[1])}</td>
-        <td><button class="b" style="padding:3px 9px;font-size:12px" data-mod="${c.id}">Modifier</button>
-        <button class="b" style="padding:3px 9px;font-size:12px;margin-left:4px" data-sup="${c.id}">Supprimer</button></td></tr>`
-    ).join('')}</table></div>
-
-  <div class="card"><h2>Créer un compte</h2>
-    <div class="row"><label class="lb">Identifiant</label><div><input id="nc-nom" placeholder="nom de l'agent"></div></div>
-    <div class="row"><label class="lb">Rôle</label><div><select id="nc-role">${ROLES.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></div></div>
-    <div class="row"><label class="lb">Mot de passe</label><div><input id="nc-mdp" type="password"></div></div>
-    <div id="nc-err" class="hint" style="color:var(--red)"></div>
-    <div class="actions"><button class="b pri" id="nc-go">Créer</button></div></div>`;
-
-  document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{ editCompte=b.dataset.mod; renderComptes(); });
-  const okB=document.getElementById('ec-ok');
-  if(okB) okB.onclick=async()=>{
-    const c=COMPTES.find(x=>x.id===editCompte); if(!c) return;
-    const nom=document.getElementById('ec-nom').value.trim(); if(!nom) return;
-    c.nom=nom; c.role=document.getElementById('ec-role').value;
-    const mdp=document.getElementById('ec-mdp').value; if(mdp) c.mdp=mdp;
-    editCompte=null; await saveAuth();
-    if(UTILISATEUR && UTILISATEUR.id===c.id){ UTILISATEUR={id:c.id,nom:c.nom,role:c.role}; await saveSession(); }
-    renderComptes();
-  };
-  const noB=document.getElementById('ec-no'); if(noB) noB.onclick=()=>{ editCompte=null; renderComptes(); };
-  document.querySelectorAll('[data-sup]').forEach(b=>b.onclick=async()=>{
-    const c=COMPTES.find(x=>x.id===b.dataset.sup); if(!c) return;
-    if(c.role==='admin' && COMPTES.filter(x=>x.role==='admin').length<=1){ alert("Impossible de supprimer le dernier compte administrateur."); return; }
-    if(!confirm(`Supprimer le compte « ${c.nom} » ?`)) return;
-    COMPTES=COMPTES.filter(x=>x.id!==c.id); await saveAuth();
-    if(UTILISATEUR && UTILISATEUR.id===c.id) return logout();
-    renderComptes();
-  });
-  document.getElementById('nc-go').onclick=async()=>{
-    const nom=document.getElementById('nc-nom').value.trim(), mdp=document.getElementById('nc-mdp').value;
-    const err=document.getElementById('nc-err');
-    if(!nom||!mdp){ err.textContent='Identifiant et mot de passe requis.'; return; }
-    if(COMPTES.some(x=>x.nom.toLowerCase()===nom.toLowerCase())){ err.textContent='Cet identifiant existe déjà.'; return; }
-    COMPTES.push({id:idCompte(),nom,role:document.getElementById('nc-role').value,mdp});
-    await saveAuth(); renderComptes();
-  };
 }
 
 // ══════════════════════════════════════════════════ 6. COMMANDES (admin seulement — validation par le directeur)
@@ -3548,9 +3522,11 @@ function renderCmd(){
       <p class="hint">Seul canal exigeant l'intervention d'un agent. Adapté aux institutions et aux licences annuelles.</p>`}</div>
     <div class="tot"><span>${OFFRES[OFFRE].t}${ATTEST?' + attestation':''}</span><b>${fcfa(totalC())}</b></div>
     <p class="hint">Les recettes des services de l'État sont encaissées par le Trésor public. Le paiement s'effectue sur la plateforme ${REGIE.plateforme}, quel que soit le canal retenu ; les Archives Nationales n'encaissent pas directement et délivrent une quittance.</p>
-    ${!UTILISATEUR?`<div class="warn" style="margin:0 0 14px">Un compte est requis pour passer une commande — il permet de la suivre et d'en obtenir la validation par le directeur. <button class="b pri" id="cnx" style="margin-left:8px">Se connecter / S'inscrire</button></div>`
+    ${!UTILISATEUR?`<div class="row" style="border:0;padding:6px 0"><label class="lb">Nom du demandeur</label><div><input id="cmd-nom" placeholder="ex. A. Ngono"></div></div>
+      <div class="row" style="border:0;padding:6px 0 14px"><label class="lb">Contact</label><div><input id="cmd-contact" placeholder="téléphone ou e-mail"></div></div>
+      <p class="hint" style="margin:0 0 14px">Identité requise pour suivre la commande et sa validation par le directeur — attachée directement à cette commande, sans compte à créer.</p>`
       :UTILISATEUR.role===ROLE_PUBLIC?`<p class="hint" style="margin:0 0 8px">Commande enregistrée au nom de <b>${esc(UTILISATEUR.nomComplet||UTILISATEUR.nom)}</b>.</p>`:''}
-    <div class="actions"><button class="b pri" id="pay" ${!UTILISATEUR?'disabled':''}>Émettre l'ordre de recette et payer ${fcfa(totalC())}</button></div>
+    <div class="actions"><button class="b pri" id="pay">Émettre l'ordre de recette et payer ${fcfa(totalC())}</button></div>
     ${PROG.length?`<div style="margin-top:14px">${PROG.map(s=>`<div class="prog">✓ ${esc(s)}</div>`).join('')}</div>`:''}</div>
   <div class="card"><h2>Ce qui est simulé</h2>
     <p class="sub" style="margin-bottom:0">Le parcours, la tarification, les différences de flux et la génération des fichiers sont réels. Aucun paiement n'est effectué, aucune donnée bancaire collectée ; les taux de frais sont indicatifs. Une mise en service suppose un compte marchand, un contrat d'agrégation couvrant MTN et Orange en une intégration, un prestataire pour les cartes, et une régie de recettes conforme à la comptabilité publique. Le développement est la partie courte ; les conventions sont la partie longue.</p></div>`;
@@ -3559,8 +3535,14 @@ function renderCmd(){
   document.querySelectorAll('[data-c]').forEach(c=>c.onchange=()=>{c.checked?PANIER.add(c.dataset.c):PANIER.delete(c.dataset.c);renderCmd()});
   document.querySelectorAll('[data-f]').forEach(r=>r.onchange=()=>{FORMAT=r.dataset.f;renderCmd()});
   const a=document.getElementById('att'); if(a) a.onchange=()=>{ATTEST=a.checked;renderCmd()};
-  const p=document.getElementById('pay'); if(p) p.onclick=payer;
-  const cnx=document.getElementById('cnx'); if(cnx) cnx.onclick=()=>{ PUBLIC_AUTH='login'; sync(); scrollTo(0,0); };
+  const p=document.getElementById('pay'); if(p) p.onclick=async()=>{
+    if(!UTILISATEUR){
+      const nom=document.getElementById('cmd-nom').value.trim(), contact=document.getElementById('cmd-contact').value.trim();
+      if(!nom||!contact){ alert('Indiquez votre nom et un contact (téléphone ou e-mail) pour passer la commande.'); return; }
+      UTILISATEUR={id:idCompte(),nom:contact,nomComplet:nom,contact,role:ROLE_PUBLIC}; await saveSession(); majAuthUI();
+    }
+    payer();
+  };
 }
 let ORDRE='';
 function payer(){
@@ -3919,5 +3901,5 @@ Paul Biya.`,
 ];
 
 // ══════════════════════════════════════════════════ INIT
-(async()=>{ await load(); await loadAuth(); await loadSession(); await loadGemini(); if(memoryOnly) avert(); if(location.hash) lireURL(); else sync(); })();
+(async()=>{ await load(); await loadSession(); await loadGemini(); if(memoryOnly) avert(); if(location.hash) lireURL(); else sync(); })();
 </script>
