@@ -612,7 +612,15 @@ function sync(){
   document.getElementById('tabs').innerHTML=onglets.map(([k,l])=>{
     const b = (k==='saisie'&&DB.queue.length) ? ` <b style="font-family:var(--mono);font-size:11px;background:var(--ochre);color:#fff;border-radius:9px;padding:1px 7px;margin-left:5px;font-weight:500">${DB.queue.length}</b>` : '';
     return `<button data-v="${k}" aria-current="${VUE===k}">${l}${b}</button>`;}).join('');
-  document.querySelectorAll('#tabs button').forEach(b=> b.onclick=()=>{ VUE=b.dataset.v; ouvert=null; PUBLIC_AUTH=null; sync(); });
+  document.querySelectorAll('#tabs button').forEach(b=> b.onclick=()=>{
+    VUE=b.dataset.v; ouvert=null; PUBLIC_AUTH=null;
+    // Un autre agent peut avoir soumis ou validé quelque chose pendant qu'on regardait un autre
+    // onglet : sans ça, ADMIN_CHARGE/CMDADMIN_CHARGE ne se chargeraient qu'une fois à l'entrée
+    // dans l'espace Administration, et un contrôleur resté sur un autre onglet ne verrait jamais
+    // une nouvelle fiche arriver dans Contrôle qualité sans recharger toute la page.
+    if(ESPACE==='admin'){ ADMIN_CHARGE=false; CMDADMIN_CHARGE=false; }
+    sync();
+  });
   document.getElementById('who').textContent = DB.config ? DB.config.annotateur+' · '+DB.config.mode
     : (ESPACE==='admin' ? NOTICES_ADMIN.length : NOTICES_OPAC.length)+' notice(s)';
   if(ESPACE==='opac' && PUBLIC_AUTH && !UTILISATEUR) renderAuthPublic();
