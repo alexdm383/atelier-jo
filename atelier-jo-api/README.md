@@ -41,6 +41,23 @@ autres postes du réseau local s'y connectent via l'adresse IP de la machine
 qui l'héberge, ex. `http://192.168.1.42:3000`. Pour trouver cette adresse :
 `ipconfig` (Windows) ou `ip addr` (Linux).
 
+## Lecteur PDF vendorisé
+
+`public/pdf.min.js` et `public/pdf.worker.min.js` (pdf.js 3.11.174) sont commités
+dans le dépôt, pas téléchargés au démarrage. Choix délibéré : le repli vers le CDN
+cdnjs dans `atelier-jo-complet.html` n'existe que pour le cas où ces fichiers
+manqueraient, jamais l'inverse — un poste d'archives publiques peut tourner
+derrière un pare-feu qui bloque cdnjs sans bloquer l'accès aux autres postes du
+réseau local, et un script de mise en place nécessitant une connexion au premier
+démarrage réintroduirait exactement la dépendance réseau que la vendorisation
+est censée éliminer. Le serveur avertit clairement au démarrage si l'un des deux
+fichiers est absent de `public/` (voir `server.js`) plutôt que de laisser
+`atelier-jo-complet.html` retomber sur le CDN sans le dire.
+
+À mettre à jour en cas de changement de version de pdf.js : remplacer les deux
+fichiers dans `public/`, et la ligne `pdf.js/3.11.174/` dans
+`atelier-jo-complet.html` (script et repli CDN).
+
 ## Démarrage sur poste Windows
 
 `demarrer-serveur.bat`, dans ce dossier, joue pour ce serveur le rôle que

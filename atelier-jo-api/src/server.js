@@ -78,6 +78,22 @@ function synchroniserFrontend() {
   }
 }
 synchroniserFrontend();
+
+// pdf.min.js et pdf.worker.min.js sont vendorisés (commités dans public/, voir README) pour que la
+// lecture des PDF marche même derrière un pare-feu qui bloquerait cdnjs — le CDN ne doit servir que
+// de repli si ces fichiers sont absents, jamais l'inverse (voir atelier-jo-complet.html). Ce repli
+// silencieux a longtemps été le cas réel en pratique : averti clairement ici pour que ça ne se
+// reproduise plus sans que personne ne le remarque.
+['pdf.min.js', 'pdf.worker.min.js'].forEach((nom) => {
+  if (!fs.existsSync(path.join(PUBLIC_DIR, nom))) {
+    console.warn(
+      `ATTENTION : public/${nom} est absent. La lecture des PDF dépendra du CDN cdnjs à chaque ` +
+      'chargement de page, silencieusement pour l\'utilisateur — ce qui échouera derrière un ' +
+      "pare-feu qui bloque ce domaine. Voir README.md pour vendoriser ce fichier."
+    );
+  }
+});
+
 app.use(express.static(PUBLIC_DIR));
 
 const PORT = process.env.PORT || 3000;
