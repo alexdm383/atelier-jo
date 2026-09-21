@@ -24,12 +24,12 @@ function versVue(ligne) {
 
 // ── Lecture ──────────────────────────────────────────────────────────
 // Ouverte à tous (catalogue public), mais le filtre dépend du rôle :
-// un visiteur anonyme ou le rôle "public" ne voit que les notices validées ;
+// un visiteur anonyme ou le rôle "chercheur" ne voit que les notices validées ;
 // un agent interne authentifié voit tout, y compris les brouillons — c'est
 // voulu pour le travail de catalogage, mais ça veut dire que cette route ne
 // doit être appelée avec une session que depuis l'espace Administration.
 router.get('/', authentifierOptionnel, (req, res) => {
-  const estAgentInterne = req.user && req.user.role !== 'public';
+  const estAgentInterne = req.user && req.user.role !== 'chercheur';
   const lignes = estAgentInterne
     ? db.prepare('SELECT * FROM notices ORDER BY modifie_le DESC').all()
     : db.prepare("SELECT * FROM notices WHERE statut = 'validee' ORDER BY modifie_le DESC").all();
@@ -39,7 +39,7 @@ router.get('/', authentifierOptionnel, (req, res) => {
 router.get('/:id', authentifierOptionnel, (req, res) => {
   const ligne = db.prepare('SELECT * FROM notices WHERE id = ?').get(req.params.id);
   if (!ligne) return res.status(404).json({ erreur: 'Notice introuvable.' });
-  const estAgentInterne = req.user && req.user.role !== 'public';
+  const estAgentInterne = req.user && req.user.role !== 'chercheur';
   if (ligne.statut !== 'validee' && !estAgentInterne) {
     return res.status(404).json({ erreur: 'Notice introuvable.' }); // 404, pas 403 : ne pas révéler qu'elle existe
   }
