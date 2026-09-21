@@ -195,7 +195,6 @@ mark{background:#FBEFC4;color:inherit;padding:0 1px;border-radius:2px}
 
 <main>
   <div class="warn" id="warn" hidden></div>
-  <div id="avisRole" class="hint" style="margin:0 0 14px" hidden></div>
   <div id="app"></div>
 </main>
 
@@ -353,8 +352,18 @@ async function saveSession(){ try{ await window.storage.set(KEY_SESSION, UTILISA
 let CLE_GEMINI='';
 async function loadGemini(){ try{ const r=await window.storage.get(KEY_GEMINI); if(r&&r.value) CLE_GEMINI=r.value; }catch(e){} }
 async function saveGemini(v){ CLE_GEMINI=v||''; try{ await window.storage.set(KEY_GEMINI, CLE_GEMINI); }catch(e){} }
+// Identité vérifiée par le serveur (cookie de session httpOnly) — jamais construite
+// depuis un choix libre côté client. Renvoie {id,nom,role} ou null si pas de session valide.
+async function chargerSessionServeur(){
+  try{
+    const r=await fetch('/api/auth/moi',{credentials:'include'});
+    if(!r.ok) return null;
+    return await r.json();
+  }catch(e){ return null; }
+}
 async function logout(){
   const public_=UTILISATEUR&&UTILISATEUR.role===ROLE_PUBLIC;
+  try{ await fetch('/api/auth/deconnexion',{method:'POST',credentials:'include'}); }catch(e){}
   UTILISATEUR=null; await saveSession();
   if(!public_){ ESPACE='admin'; VUE='versement'; }
   sync();
@@ -363,28 +372,32 @@ function renderLogin(){
   const stg=LOGIN_CONTEXTE==='stagiaire', op=LOGIN_CONTEXTE==='operateur';
   const titreCtx=stg?' — Espace stagiaire':op?' — Espace opérateur':'';
   const sousTitreCtx=stg?'Réservé aux stagiaires des Archives.':op?'Réservé aux opérateurs et contrôleurs qualité des Archives.':'Espace Administration — réservé aux agents des Archives.';
-  const rolesInternes=ROLES.filter(r=>r[0]!==ROLE_PUBLIC);
-  const roleParDefaut=stg?'stagiaire':op?'operateur':'admin';
   app.innerHTML=`
   <button class="back" id="bkPub">← ${t('Retour au catalogue public','Back to the public catalogue')}</button>
-  <div class="card" style="max-width:420px;margin:16px auto 40px"><h2>Identification${titreCtx}</h2>
+  <div class="card" style="max-width:420px;margin:16px auto 40px"><h2>Connexion${titreCtx}</h2>
     <p class="sub">${sousTitreCtx}</p>
-    <div class="row"><label class="lb">Nom complet</label><div><input id="lg-nom" autocomplete="name"></div></div>
-    <div class="row"><label class="lb">Rôle</label><div><select id="lg-role">${rolesInternes.map(r=>`<option value="${r[0]}" ${r[0]===roleParDefaut?'selected':''}>${esc(r[1])}</option>`).join('')}</select></div></div>
+    <div class="row"><label class="lb">Email</label><div><input id="lg-email" type="email" autocomplete="username"></div></div>
+    <div class="row"><label class="lb">Mot de passe</label><div><input id="lg-mdp" type="password" autocomplete="current-password"></div></div>
     <div id="lg-err" class="hint" style="color:var(--red)"></div>
-    <div class="actions"><button class="b pri" id="lg-go">Entrer</button></div>
-    <p class="hint" style="margin-top:18px">Cette identification déclarative sert à tracer qui a saisi ou contrôlé chaque fiche ; ce n'est <b>pas</b> un contrôle d'accès sécurisé — rien n'empêche de se déclarer sous un rôle qui n'est pas le sien. La sécurité réelle des accès sera mise en place avec le prochain projet.</p></div>`;
+    <div class="actions"><button class="b pri" id="lg-go">Se connecter</button></div></div>`;
   document.getElementById('bkPub').onclick=()=>{ ESPACE='opac'; VUE=TABS.opac[0][0]; LOGIN_CONTEXTE=null; sync(); scrollTo(0,0); };
   const go=async()=>{
-    const nom=document.getElementById('lg-nom').value.trim();
-    if(!nom){ document.getElementById('lg-err').textContent='Le nom est requis.'; document.getElementById('lg-nom').focus(); return; }
-    const role=document.getElementById('lg-role').value;
-    UTILISATEUR={id:idCompte(),nom,nomComplet:nom,role}; await saveSession(); LOGIN_CONTEXTE=null;
-    VUE=role==='controleur'?'controle':'versement'; sync();
+    const email=document.getElementById('lg-email').value.trim(), mot_de_passe=document.getElementById('lg-mdp').value;
+    const err=document.getElementById('lg-err'); err.textContent='';
+    if(!email||!mot_de_passe){ err.textContent='Email et mot de passe requis.'; return; }
+    let r,data;
+    try{
+      r=await fetch('/api/auth/connexion',{method:'POST',credentials:'include',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mot_de_passe})});
+      data=await r.json();
+    }catch(e){ err.textContent="Impossible de joindre le serveur. Vérifiez votre connexion."; return; }
+    if(!r.ok){ err.textContent=data.erreur||'Connexion refusée.'; return; }
+    UTILISATEUR=data; await saveSession(); LOGIN_CONTEXTE=null;
+    VUE=data.role==='controleur'?'controle':'versement'; sync();
   };
   document.getElementById('lg-go').onclick=go;
-  document.getElementById('lg-nom').onkeydown=e=>{ if(e.key==='Enter') go(); };
-  document.getElementById('lg-nom').focus();
+  document.getElementById('lg-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
+  document.getElementById('lg-email').focus();
 }
 
 // ══════════════════════════════════════════════════ SAUVEGARDE PERSONNELLE (mode memoryOnly)
@@ -445,14 +458,6 @@ function majAuthUI(){
   el.innerHTML=`${esc(UTILISATEUR.nomComplet||UTILISATEUR.nom)} · <span>${esc(tDict(lib))}</span> <button id="deco" style="font:inherit;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0;margin-left:6px">${t('Se déconnecter','Log out')}</button>`;
   document.getElementById('deco').onclick=logout;
 }
-// Rappel affiché dans tout l'espace Administration : l'identification (priorité 2B) est déclarative,
-// pas un contrôle d'accès réel — voir renderLogin(). Doit rester visible partout dans cet espace.
-function majAvisRole(){
-  const el=document.getElementById('avisRole'); if(!el) return;
-  const dans=ESPACE==='admin' && UTILISATEUR && UTILISATEUR.role!==ROLE_PUBLIC;
-  el.hidden=!dans;
-  if(dans) el.textContent=`Connecté(e) comme ${UTILISATEUR.nomComplet||UTILISATEUR.nom} · ${(ROLES.find(r=>r[0]===UTILISATEUR.role)||[,UTILISATEUR.role])[1]} — identification déclarative, sans mot de passe : ce n'est pas un contrôle d'accès sécurisé.`;
-}
 function sync(){
   document.querySelectorAll('[data-e]').forEach(b=> b.setAttribute('aria-pressed', b.dataset.e===ESPACE));
   document.querySelectorAll('[data-l]').forEach(b=> b.setAttribute('aria-pressed', b.dataset.l===LANG));
@@ -460,7 +465,6 @@ function sync(){
   majAuthUI();
   majNavAuth();
   majSauvegarde();
-  majAvisRole();
 
   if(ESPACE==='admin' && (!UTILISATEUR || UTILISATEUR.role===ROLE_PUBLIC)){
     if(UTILISATEUR){ ESPACE='opac'; VUE=TABS.opac[0][0]; return sync(); }
@@ -3910,5 +3914,16 @@ Paul Biya.`,
 ];
 
 // ══════════════════════════════════════════════════ INIT
-(async()=>{ await load(); await loadSession(); await loadGemini(); if(memoryOnly) avert(); if(location.hash) lireURL(); else sync(); })();
+(async()=>{
+  await load(); await loadSession();
+  // La session serveur (cookie httpOnly) fait autorité pour les rôles internes. Une entrée locale
+  // qui prétendrait à un rôle interne sans session serveur valide serait exactement le contournement
+  // que l'authentification réelle est censée éliminer — elle est donc écartée si le serveur ne la
+  // confirme pas. Une identité "chercheur" locale (parcours Commander, pas encore branché sur l'API)
+  // reste en revanche acceptée telle quelle pour l'instant.
+  const moi=await chargerSessionServeur();
+  if(moi){ UTILISATEUR=moi; await saveSession(); }
+  else if(UTILISATEUR && UTILISATEUR.role!==ROLE_PUBLIC){ UTILISATEUR=null; await saveSession(); }
+  await loadGemini(); if(memoryOnly) avert(); if(location.hash) lireURL(); else sync();
+})();
 </script>
