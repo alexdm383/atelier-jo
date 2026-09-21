@@ -20,12 +20,17 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
+-- 'chercheur' ajouté à la étape 3 (comptes publics) : SQLite ne permet pas
+-- d'altérer une contrainte CHECK en place, donc CREATE TABLE IF NOT EXISTS ne
+-- suffit pas seul pour un fichier .db déjà créé avec l'ancienne contrainte —
+-- un tel fichier doit être supprimé et recréé (pas de préservation de
+-- données nécessaire, rien n'est en production à ce stade).
 CREATE TABLE IF NOT EXISTS comptes (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
   nom                 TEXT NOT NULL,
   email               TEXT NOT NULL UNIQUE,
   mot_de_passe_hache  TEXT NOT NULL,
-  role                TEXT NOT NULL CHECK(role IN ('admin','controleur','operateur','stagiaire')),
+  role                TEXT NOT NULL CHECK(role IN ('admin','controleur','operateur','stagiaire','chercheur')),
   actif               INTEGER NOT NULL DEFAULT 1,
   cree_le             TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -67,6 +72,25 @@ CREATE TABLE IF NOT EXISTS versements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_versements_cree_par ON versements(cree_par);
+
+-- Pas de colonnes contact/nom en dur ici : l'identité de l'acheteur se lit
+-- par jointure sur comptes (nom, email) au moment de l'affichage — une seule
+-- source de vérité, jamais désynchronisée si le compte change de nom.
+CREATE TABLE IF NOT EXISTS commandes (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  compte_id      INTEGER NOT NULL REFERENCES comptes(id),
+  actes_ids      TEXT NOT NULL,             -- JSON : liste d'ids de notices
+  offre          TEXT,
+  statut         TEXT NOT NULL DEFAULT 'en_attente'
+                   CHECK(statut IN ('en_attente','validee','refusee')),
+  motif_refus    TEXT,
+  validateur_id  INTEGER REFERENCES comptes(id),
+  date_validation TEXT,
+  cree_le        TEXT NOT NULL DEFAULT (datetime('now')),
+  modifie_le     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_commandes_compte ON commandes(compte_id);
 `);
 
 module.exports = db;

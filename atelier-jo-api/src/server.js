@@ -11,8 +11,9 @@ app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/notices', require('./routes/notices.routes'));
 app.use('/api/comptes', require('./routes/comptes.routes'));
 app.use('/api/versements', require('./routes/versements.routes'));
-// TODO, même patron que notices.routes.js :
-//   app.use('/api/commandes',  require('./routes/commandes.routes'));
+// Pas de préfixe commun unique (POST /api/commandes, GET /api/mes-commandes,
+// etc.) : le routeur définit ses chemins complets sous /api directement.
+app.use('/api', require('./routes/commandes.routes'));
 
 // Sert atelier-jo-complet.html (à placer dans public/) sur la même origine
 // que l'API : c'est ce qui évite le blocage "contenu mixte" du navigateur.

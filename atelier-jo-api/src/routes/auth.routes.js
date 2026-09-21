@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { verifier } = require('../auth/hash');
+const { hacher, verifier } = require('../auth/hash');
 const { signer } = require('../auth/jwt');
 const { authentifier } = require('../auth/middleware');
 
@@ -31,6 +31,39 @@ router.post('/connexion', async (req, res) => {
   const jeton = signer({ id: compte.id, nom: compte.nom, role: compte.role });
   res.cookie('session', jeton, OPTIONS_COOKIE);
   res.json({ id: compte.id, nom: compte.nom, role: compte.role });
+});
+
+// Ouvert à tous, sans authentifier() : c'est la seule façon dont un visiteur
+// devient un rôle interne si on n'y prend pas garde — le rôle est donc FORCÉ
+// à 'chercheur' ici, quoi que le corps de la requête contienne. N'accepte
+// jamais un rôle envoyé par le client sur cette route.
+router.post('/inscription', async (req, res) => {
+  const { nom, email, mot_de_passe } = req.body || {};
+  if (!nom || !email || !mot_de_passe) {
+    return res.status(400).json({ erreur: 'Nom, email et mot de passe sont requis.' });
+  }
+  if (mot_de_passe.length < 10) {
+    return res.status(400).json({ erreur: 'Le mot de passe doit compter au moins 10 caractères.' });
+  }
+
+  const hache = await hacher(mot_de_passe);
+  let compte;
+  try {
+    const resultat = db.prepare(
+      "INSERT INTO comptes (nom, email, mot_de_passe_hache, role) VALUES (?, ?, ?, 'chercheur')"
+    ).run(nom, email, hache);
+    compte = db.prepare('SELECT * FROM comptes WHERE id = ?').get(resultat.lastInsertRowid);
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) {
+      return res.status(409).json({ erreur: `Un compte existe déjà avec l'email ${email}.` });
+    }
+    throw e;
+  }
+
+  // Connecte automatiquement après inscription, comme /connexion.
+  const jeton = signer({ id: compte.id, nom: compte.nom, role: compte.role });
+  res.cookie('session', jeton, OPTIONS_COOKIE);
+  res.status(201).json({ id: compte.id, nom: compte.nom, role: compte.role });
 });
 
 router.post('/deconnexion', (req, res) => {
