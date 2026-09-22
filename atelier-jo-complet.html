@@ -189,6 +189,25 @@ mark{background:#FBEFC4;color:inherit;padding:0 1px;border-radius:2px}
 .addp[data-in="1"]{background:var(--blue);border-color:var(--blue);color:#fff}
 .perma{font-family:var(--mono);font-size:11.5px;color:var(--ink3);word-break:break-all}
 @media(max-width:860px){.layout,.two,.dl,.track,.axis,.row{grid-template-columns:1fr}.dl dd{margin-bottom:8px}label.lb{padding-top:0}}
+
+/* notifications et confirmation — remplacent alert()/confirm() natifs */
+#toasts{position:fixed;bottom:18px;right:18px;z-index:100;display:flex;flex-direction:column;gap:10px;max-width:380px;width:calc(100% - 36px)}
+.toast{background:var(--card);border:1px solid var(--ruleS);border-left:3px solid var(--ink3);border-radius:3px;padding:12px 14px;font-size:13.5px;line-height:1.45;box-shadow:0 4px 16px rgba(27,32,37,.14);display:flex;gap:10px;align-items:flex-start;animation:toast-in .16s ease-out}
+.toast.err{border-left-color:var(--red)}
+.toast.ok{border-left-color:var(--green)}
+.toast.info{border-left-color:var(--ochre)}
+.toast .msg{flex:1}
+.toast button{font:inherit;font-size:16px;line-height:1;border:0;background:none;color:var(--ink3);cursor:pointer;padding:0}
+.toast button:hover{color:var(--ink)}
+@keyframes toast-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+#modalHost:empty{display:none}
+.modalOverlay{position:fixed;inset:0;background:rgba(27,32,37,.45);display:flex;align-items:center;justify-content:center;z-index:110;padding:20px}
+.modalBox{background:var(--card);border-radius:3px;max-width:440px;width:100%;padding:22px 24px;box-shadow:0 12px 32px rgba(27,32,37,.28)}
+.modalBox h2{font-size:17px;margin-bottom:8px}
+.modalBox p{font-size:14px;color:var(--ink2);line-height:1.5;margin:0 0 18px}
+button.b.danger{background:var(--red);border-color:var(--red);color:#fff}
+button.b.danger:hover{background:#7A3131;border-color:#7A3131}
+@media(max-width:860px){#toasts{right:10px;left:10px;bottom:10px;max-width:none;width:auto}}
 </style>
 
 <header>
@@ -210,6 +229,8 @@ mark{background:#FBEFC4;color:inherit;padding:0 1px;border-radius:2px}
   <div class="warn" id="warn" hidden></div>
   <div id="app"></div>
 </main>
+<div id="toasts" aria-live="polite"></div>
+<div id="modalHost"></div>
 
 <script>
 // ══════════════════════════════════════════════════ REPLI DE STOCKAGE
@@ -358,20 +379,20 @@ const OPAC=()=>NOTICES_OPAC.filter(n=>!n.statut||n.statut==='validee').map(vue);
 let NOTICES_ADMIN=[], ADMIN_CHARGE=false;
 async function chargerNoticesAdmin(){
   try{ const r=await fetch('/api/notices',{credentials:'include'}); if(r.ok) NOTICES_ADMIN=await r.json(); }
-  catch(e){}
+  catch(e){ toast("Liste des notices indisponible : le serveur n'a pas répondu. Réessayez ou vérifiez votre connexion.",'err'); }
 }
 // Commandes du chercheur connecté (Commander, Mes commandes, et les indicateurs « déjà acquis »
 // sur la fiche d'une notice) — jamais celles d'un autre visiteur, voir GET /api/mes-commandes.
 let MES_COMMANDES=[], MESCMD_CHARGE=false;
 async function chargerMesCommandes(){
   try{ const r=await fetch('/api/mes-commandes',{credentials:'include'}); if(r.ok) MES_COMMANDES=await r.json(); }
-  catch(e){}
+  catch(e){ toast("Vos commandes n'ont pas pu être chargées : le serveur n'a pas répondu. Réessayez ou vérifiez votre connexion.",'err'); }
 }
 // Toutes les commandes, pour l'onglet Commandes de l'espace Administration (admin uniquement).
 let COMMANDES_ADMIN=[], CMDADMIN_CHARGE=false;
 async function chargerCommandesAdmin(){
   try{ const r=await fetch('/api/commandes',{credentials:'include'}); if(r.ok) COMMANDES_ADMIN=await r.json(); }
-  catch(e){}
+  catch(e){ toast("Liste des commandes indisponible : le serveur n'a pas répondu. Réessayez ou vérifiez votre connexion.",'err'); }
 }
 // Centralise l'appel à l'API (notices, versements, commandes...) : ajoute les identifiants de
 // session, lit un message d'erreur lisible renvoyé par le serveur au lieu de se fier au seul
@@ -382,6 +403,52 @@ async function api(chemin, options){
   let data=null; try{ data=await r.json(); }catch(e){}
   if(!r.ok) throw new Error((data&&data.erreur) || `Erreur ${r.status}`);
   return data;
+}
+
+// ══════════════════════════════════════════════════ NOTIFICATIONS ET CONFIRMATION
+// Remplacent alert()/confirm() natifs, sur tout le fichier : un bandeau non bloquant pour informer
+// (ne recouvre jamais l'écran, l'agent garde la main), une modale stylée pour confirmer une action
+// destructive ou irréversible. Jamais de message vague : on dit ce qui a échoué, et si possible quoi faire.
+function toast(message, type){
+  type = type || 'err';
+  const hote = document.getElementById('toasts'); if(!hote) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  const msg = document.createElement('span'); msg.className='msg'; msg.textContent = message;
+  const fermer = document.createElement('button'); fermer.setAttribute('aria-label','Fermer'); fermer.textContent = '×';
+  el.append(msg, fermer);
+  const retirer = () => el.remove();
+  fermer.onclick = retirer;
+  hote.appendChild(el);
+  setTimeout(retirer, type==='ok' ? 5000 : 9000);
+  return el;
+}
+// titre/message : texte affiché. texteConfirmer : libellé du bouton destructif (défaut « Confirmer »).
+// Résout à true (confirmé) ou false (annulé, Échap, ou clic hors de la boîte) — jamais de rejet.
+function confirmerAction(titre, message, texteConfirmer){
+  return new Promise(resolve => {
+    const hote = document.getElementById('modalHost');
+    hote.innerHTML = `<div class="modalOverlay"><div class="modalBox" role="alertdialog" aria-modal="true" aria-labelledby="modal-titre">
+      <h2 id="modal-titre">${esc(titre)}</h2><p>${esc(message)}</p>
+      <div class="actions"><button class="b danger" id="modal-ok">${esc(texteConfirmer||'Confirmer')}</button><button class="b" id="modal-annuler">Annuler</button></div>
+      </div></div>`;
+    const fermer = v => { document.removeEventListener('keydown', surTouche); hote.innerHTML=''; resolve(v); };
+    function surTouche(e){ if(e.key==='Escape') fermer(false); }
+    document.getElementById('modal-ok').onclick = () => fermer(true);
+    document.getElementById('modal-annuler').onclick = () => fermer(false);
+    hote.querySelector('.modalOverlay').addEventListener('click', e => { if(e.target.classList.contains('modalOverlay')) fermer(false); });
+    document.addEventListener('keydown', surTouche);
+    document.getElementById('modal-annuler').focus();
+  });
+}
+// Enrobe une action déclenchée par un bouton : le désactive et change son libellé pendant l'attente,
+// restaure toujours l'état d'origine ensuite (y compris en cas d'erreur) — jamais un bouton qui reste
+// cliquable, ou bloqué en l'état « en cours », pendant qu'un appel serveur est en vol.
+async function avecChargement(bouton, texteChargement, tache){
+  const texteOriginal = bouton.textContent;
+  bouton.disabled = true; bouton.textContent = texteChargement;
+  try{ return await tache(); }
+  finally{ bouton.disabled = false; bouton.textContent = texteOriginal; }
 }
 
 // ══════════════════════════════════════════════════ STOCKAGE
@@ -445,15 +512,17 @@ function renderLogin(){
     const email=document.getElementById('lg-email').value.trim(), mot_de_passe=document.getElementById('lg-mdp').value;
     const err=document.getElementById('lg-err'); err.textContent='';
     if(!email||!mot_de_passe){ err.textContent='Email et mot de passe requis.'; return; }
-    let r,data;
-    try{
-      r=await fetch('/api/auth/connexion',{method:'POST',credentials:'include',
-        headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mot_de_passe})});
-      data=await r.json();
-    }catch(e){ err.textContent="Impossible de joindre le serveur. Vérifiez votre connexion."; return; }
-    if(!r.ok){ err.textContent=data.erreur||'Connexion refusée.'; return; }
-    UTILISATEUR=data; await saveSession(); LOGIN_CONTEXTE=null;
-    VUE=data.role==='controleur'?'controle':'versement'; sync();
+    await avecChargement(document.getElementById('lg-go'),'Connexion…',async()=>{
+      let r,data;
+      try{
+        r=await fetch('/api/auth/connexion',{method:'POST',credentials:'include',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mot_de_passe})});
+        data=await r.json();
+      }catch(e){ err.textContent="Impossible de joindre le serveur. Vérifiez votre connexion."; return; }
+      if(!r.ok){ err.textContent=data.erreur||'Connexion refusée.'; return; }
+      UTILISATEUR=data; await saveSession(); LOGIN_CONTEXTE=null;
+      VUE=data.role==='controleur'?'controle':'versement'; sync();
+    });
   };
   document.getElementById('lg-go').onclick=go;
   document.getElementById('lg-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
@@ -560,14 +629,16 @@ function renderAuthPublic(){
       const email=document.getElementById('pl-email').value.trim(), mot_de_passe=document.getElementById('pl-mdp').value;
       const err=document.getElementById('pl-err'); err.textContent='';
       if(!email||!mot_de_passe){ err.textContent='Email et mot de passe requis.'; return; }
-      let r,data;
-      try{
-        r=await fetch('/api/auth/connexion',{method:'POST',credentials:'include',
-          headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mot_de_passe})});
-        data=await r.json();
-      }catch(e){ err.textContent="Impossible de joindre le serveur."; return; }
-      if(!r.ok){ err.textContent=data.erreur||'Connexion refusée.'; return; }
-      UTILISATEUR=data; await saveSession(); PUBLIC_AUTH=null; sync();
+      await avecChargement(document.getElementById('pl-go'),'Connexion…',async()=>{
+        let r,data;
+        try{
+          r=await fetch('/api/auth/connexion',{method:'POST',credentials:'include',
+            headers:{'Content-Type':'application/json'},body:JSON.stringify({email,mot_de_passe})});
+          data=await r.json();
+        }catch(e){ err.textContent="Impossible de joindre le serveur."; return; }
+        if(!r.ok){ err.textContent=data.erreur||'Connexion refusée.'; return; }
+        UTILISATEUR=data; await saveSession(); PUBLIC_AUTH=null; sync();
+      });
     };
     document.getElementById('pl-go').onclick=go;
     document.getElementById('pl-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
@@ -578,14 +649,16 @@ function renderAuthPublic(){
       const nom=document.getElementById('pi-nom').value.trim(), email=document.getElementById('pi-email').value.trim(), mot_de_passe=document.getElementById('pi-mdp').value;
       const err=document.getElementById('pi-err'); err.textContent='';
       if(!nom||!email||!mot_de_passe){ err.textContent='Tous les champs sont requis.'; return; }
-      let r,data;
-      try{
-        r=await fetch('/api/auth/inscription',{method:'POST',credentials:'include',
-          headers:{'Content-Type':'application/json'},body:JSON.stringify({nom,email,mot_de_passe})});
-        data=await r.json();
-      }catch(e){ err.textContent="Impossible de joindre le serveur."; return; }
-      if(!r.ok){ err.textContent=data.erreur||'Inscription refusée.'; return; }
-      UTILISATEUR=data; await saveSession(); PUBLIC_AUTH=null; sync();
+      await avecChargement(document.getElementById('pi-go'),'Création…',async()=>{
+        let r,data;
+        try{
+          r=await fetch('/api/auth/inscription',{method:'POST',credentials:'include',
+            headers:{'Content-Type':'application/json'},body:JSON.stringify({nom,email,mot_de_passe})});
+          data=await r.json();
+        }catch(e){ err.textContent="Impossible de joindre le serveur."; return; }
+        if(!r.ok){ err.textContent=data.erreur||'Inscription refusée.'; return; }
+        UTILISATEUR=data; await saveSession(); PUBLIC_AUTH=null; sync();
+      });
     };
     document.getElementById('pi-go').onclick=go;
     document.getElementById('pi-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
@@ -1216,7 +1289,7 @@ async function chargerLot(files){
 }
 
 async function choisirDossier(){
-  if(!window.showDirectoryPicker){ alert("Ce navigateur ne permet pas de désigner un dossier. Utilisez la sélection de fichiers multiples."); return; }
+  if(!window.showDirectoryPicker){ toast("Ce navigateur ne permet pas de désigner un dossier. Utilisez la sélection de fichiers multiples."); return; }
   try{
     const rep=await window.showDirectoryPicker();
     const out=[];
@@ -1225,10 +1298,10 @@ async function choisirDossier(){
       if(!/\.(pdf|tif|tiff|jpe?g|png)$/i.test(nom)) continue;
       out.push(await h.getFile());
     }
-    if(!out.length){ alert("Aucun fichier image ou PDF trouvé dans ce dossier."); return; }
+    if(!out.length){ toast("Aucun fichier image ou PDF trouvé dans ce dossier."); return; }
     LOT_META.cote=LOT_META.cote||rep.name;
     await chargerLot(out);
-  }catch(e){ if(e && e.name!=='AbortError') alert("Dossier non accessible : "+e.message); }
+  }catch(e){ if(e && e.name!=='AbortError') toast("Dossier non accessible : "+e.message); }
 }
 
 function renderVersement(){
@@ -1299,7 +1372,7 @@ function renderVersement(){
   const v=document.getElementById('vider'); if(v) v.onclick=()=>{LOT=[];renderVersement()};
   const bp=document.getElementById('m-bpdf');
   if(bp) bp.onchange=e=>{ const f=e.target.files[0]; if(!f) return;
-    if(f.size>10*1024*1024){ alert(`Ce fichier fait ${octets(f.size)} : la limite pour le bordereau joint est de 10 Mo. Réduisez la résolution du scan ou compressez le PDF avant de le joindre.`); bp.value=''; return; }
+    if(f.size>10*1024*1024){ toast(`Ce fichier fait ${octets(f.size)} : la limite pour le bordereau joint est de 10 Mo. Réduisez la résolution du scan ou compressez le PDF avant de le joindre.`); bp.value=''; return; }
     const r=new FileReader(); r.onload=()=>{ LOT_META.bordereauPdf={nom:f.name,taille:f.size,dataUrl:r.result}; renderVersement(); };
     r.readAsDataURL(f); };
   const bx=document.getElementById('bpdf-x'); if(bx) bx.onclick=()=>{ LOT_META.bordereauPdf=null; renderVersement(); };
@@ -1307,12 +1380,10 @@ function renderVersement(){
     .forEach(([id,k])=>{ const el=document.getElementById(id); if(el) el.onchange=()=>PRESCRIPTIONS[k]=el.value; });
   [['m-op','operateur'],['m-mat','materiel'],['m-ser','serie'],['m-num','numero_jo'],['m-cote','cote']]
     .forEach(([id,k])=>{ const el=document.getElementById(id); if(el) el.onchange=()=>LOT_META[k]=el.value; });
-  const b=document.getElementById('bord'); if(b) b.onclick=async()=>{
-    b.disabled=true;
+  const b=document.getElementById('bord'); if(b) b.onclick=()=>avecChargement(b,'Enregistrement…',async()=>{
     try{ await enregistrerVersement(); bordereau(); }
-    catch(e){ alert("Le versement n'a pas pu être enregistré côté serveur : "+e.message); }
-    b.disabled=false;
-  };
+    catch(e){ toast("Le versement n'a pas pu être enregistré côté serveur : "+e.message); }
+  });
   const t=document.getElementById('trait');
   if(t) t.onclick=()=>{ LOT_FILES=LOT.map(x=>x.fichier);
     VUE='tele'; sync(); scrollTo(0,0); };
@@ -1791,7 +1862,7 @@ if(window.pdfjsLib) (async function(){
 
 async function camOn(){
   try{ STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:2200}}}); renderTele(); }
-  catch(e){ alert("Caméra indisponible ou accès refusé. Sur téléphone, utilisez le bouton « Photographier » qui ouvre l'appareil photo du système."); }
+  catch(e){ toast("Caméra indisponible ou accès refusé. Sur téléphone, utilisez le bouton « Photographier » qui ouvre l'appareil photo du système."); }
 }
 function camOff(){ if(STREAM){STREAM.getTracks().forEach(t=>t.stop());STREAM=null} renderTele(); }
 function capturer(){ const v=document.getElementById('vid'); if(!v||!v.videoWidth) return;
@@ -2102,17 +2173,18 @@ function renderSaisie(){
   propose=null;
   document.getElementById('cf').onclick=()=>{DB.config=null;save();renderConfig()};
   const skB=document.getElementById('sk'); if(skB) skB.onclick=async()=>{ if(DB.queue.length){DB.queue.shift();await save()} renderSaisie(); };
-  document.getElementById('sv').onclick=()=>enregistrer(true);
-  document.getElementById('svb').onclick=()=>enregistrer(false);
+  const svB=document.getElementById('sv'), svbB=document.getElementById('svb');
+  svB.onclick=()=>avecChargement(svB,'Envoi…',()=>enregistrer(true));
+  svbB.onclick=()=>avecChargement(svbB,'Enregistrement…',()=>enregistrer(false));
   const am=document.getElementById('annulerModif'); if(am) am.onclick=()=>{ EDIT_NOTICE_ID=null; renderSaisie(); };
   document.getElementById('modeToggle').onclick=async()=>{
-    if(!confirm(`Passer en mode ${ass?'manuel':'assisté'} ? La fiche en cours, si elle n'est pas enregistrée, sera perdue.`)) return;
+    if(!await confirmerAction('Changer de mode de saisie', `Passer en mode ${ass?'manuel':'assisté'} ? La fiche en cours, si elle n'est pas enregistrée, sera perdue.`, 'Changer de mode')) return;
     DB.config.mode=ass?'manuel':'assisté'; await save(); renderSaisie();
   };
   if(ass&&!enModif){
     document.getElementById('lot').onchange=lotFichier;
     const v=document.getElementById('vider');
-    if(v) v.onclick=async()=>{ if(confirm('Vider la file ?')){DB.queue=[];await save();renderSaisie()} };
+    if(v) v.onclick=async()=>{ if(await confirmerAction('Vider la file d\'attente', 'Les propositions non traitées de cette file seront perdues.', 'Vider la file')){DB.queue=[];await save();renderSaisie()} };
   }
   FIDS.forEach(id=>{ const e=document.getElementById('f-'+id);
     e.addEventListener('input',()=>marquer(id)); e.addEventListener('change',()=>marquer(id)); });
@@ -2148,10 +2220,10 @@ function lotFichier(e){ const f=e.target.files[0]; if(!f) return;
     // pas une proposition de notice exploitable — sans faire échouer l'import pour les autres entrées.
     const valides=items.filter(it=>it&&typeof it==='object'&&(it.type||it.intitule_fr||it.numero));
     const ignorees=items.length-valides.length;
-    if(!valides.length){ alert("Ce fichier ne contient aucune proposition reconnaissable : aucun objet ne porte de type, d'intitulé (intitule_fr) ou de numéro. Vérifiez qu'il s'agit bien d'un export de propositions, produit depuis l'onglet « Numériser et traiter »."); return; }
-    if(ignorees) alert(`${ignorees} entrée(s) ignorée(s), structure non reconnue : ni type, ni intitulé (intitule_fr), ni numéro.`);
+    if(!valides.length){ toast("Ce fichier ne contient aucune proposition reconnaissable : aucun objet ne porte de type, d'intitulé (intitule_fr) ou de numéro. Vérifiez qu'il s'agit bien d'un export de propositions, produit depuis l'onglet « Numériser et traiter »."); return; }
+    if(ignorees) toast(`${ignorees} entrée(s) ignorée(s), structure non reconnue : ni type, ni intitulé (intitule_fr), ni numéro.`,'info');
     DB.queue.push(...valides); await save(); renderSaisie();
-  }catch(x){ alert("Fichier JSON illisible."); } };
+  }catch(x){ toast("Fichier JSON illisible."); } };
   r.readAsText(f); }
 function remplir(o){ propose={}; EXTRA=o;
   FIDS.forEach(id=>{ let v=o[id]; if(Array.isArray(v)) v=v.join(', '); v=v==null?'':String(v);
@@ -2170,7 +2242,7 @@ function marquer(id){ if(!propose) return;
 async function enregistrer(soumettre){
   const d=tStop(), c=DB.config, v={};
   FIDS.forEach(id=> v[id]=document.getElementById('f-'+id).value.trim());
-  if(!v.type&&!v.intitule){ if(!confirm("Ni type ni intitulé renseignés. Enregistrer ?")){tResume();return} }
+  if(!v.type&&!v.intitule){ if(!await confirmerAction('Fiche incomplète', "Ni type ni intitulé ne sont renseignés sur cette fiche.", 'Enregistrer quand même')){tResume();return} }
   // Le statut et l'auteur ne sont plus décidés ici : le serveur les fixe (voir notices.routes.js —
   // une notice naît toujours en brouillon, quoi que le client envoie, et auteur_id vient de la
   // session, jamais du corps de la requête). Ce corps ne porte que le contenu de la fiche.
@@ -2192,7 +2264,7 @@ async function enregistrer(soumettre){
   }catch(e){
     // Ne masque jamais une erreur serveur (droits insuffisants, statut incompatible…) derrière
     // un échec silencieux : l'archiviste doit savoir pourquoi sa fiche n'a pas été enregistrée.
-    alert("Impossible d'enregistrer la notice : "+e.message);
+    toast("Impossible d'enregistrer la notice : "+e.message);
     tResume(); return;
   }
   EXTRA=null;
@@ -2240,26 +2312,26 @@ function renderControle(){
     </div>
   </div>`;
   const vb=document.getElementById('valider-fiche');
-  if(vb) vb.onclick=async()=>{
+  if(vb) vb.onclick=()=>avecChargement(vb,'Validation…',async()=>{
     // Le bouton n'est déjà proposé qu'aux rôles contrôleur/admin (onglet Contrôle qualité
     // inaccessible aux autres — voir PERMISSIONS), mais on ne se fie pas qu'à ça : si le
     // serveur refuse quand même (session expirée entretemps, etc.), l'erreur est affichée.
     try{ await api('/api/notices/'+n.id+'/valider', {method:'POST'}); }
-    catch(e){ alert("Validation refusée par le serveur : "+e.message); return; }
+    catch(e){ toast("Validation refusée par le serveur : "+e.message); return; }
     await chargerNoticesAdmin(); renderControle();
-  };
+  });
   const rb=document.getElementById('refuser-fiche'); if(rb) rb.onclick=()=>{ refusNotice=n.id; renderControle(); };
   const ra=document.getElementById('refuser-annuler'); if(ra) ra.onclick=()=>{ refusNotice=null; renderControle(); };
   const ro=document.getElementById('refuser-ok');
-  if(ro) ro.onclick=async()=>{
+  if(ro) ro.onclick=()=>avecChargement(ro,'Envoi…',async()=>{
     const motif=document.getElementById('motif-controle').value.trim();
-    if(!motif){ alert('Un motif est requis pour refuser une fiche.'); return; }
+    if(!motif){ toast('Un motif est requis pour refuser une fiche.'); return; }
     // Une fiche rejetée repasse en brouillon (et non dans un statut « refusée » à part) : l'auteur
     // la retrouve dans ses brouillons avec le motif affiché, la corrige et la resoumet.
     try{ await api('/api/notices/'+n.id+'/rejeter', {method:'POST', body:JSON.stringify({motif})}); }
-    catch(e){ alert("Refus impossible côté serveur : "+e.message); return; }
+    catch(e){ toast("Refus impossible côté serveur : "+e.message); return; }
     refusNotice=null; await chargerNoticesAdmin(); renderControle();
-  };
+  });
 }
 
 // ══════════════════════════════════════════════════ 3. MESURES
@@ -2350,31 +2422,34 @@ function renderDonnees(){
   };
   const seedEl=document.getElementById('seed');
   if(seedEl) seedEl.onclick=async()=>{
-    if(N.some(n=>n.annotateur==='Jeu de démonstration') && !confirm('Le jeu de démonstration semble déjà chargé. Le recharger quand même ?')) return;
-    seedEl.disabled=true; seedEl.textContent='Chargement…';
-    try{
-      for(const s of SEED){
-        const corps={...s}; delete corps.id;
-        const creee=await api('/api/notices', {method:'POST', body:JSON.stringify(corps)});
-        await api('/api/notices/'+creee.id+'/soumettre', {method:'POST'});
-        await api('/api/notices/'+creee.id+'/valider', {method:'POST'});
-      }
-    }catch(e){ alert("Chargement du jeu de démonstration interrompu : "+e.message); }
+    if(N.some(n=>n.annotateur==='Jeu de démonstration') && !await confirmerAction('Jeu de démonstration déjà chargé', 'Le recharger quand même créera des doublons.', 'Recharger')) return;
+    await avecChargement(seedEl,'Chargement…',async()=>{
+      try{
+        for(const s of SEED){
+          const corps={...s}; delete corps.id;
+          const creee=await api('/api/notices', {method:'POST', body:JSON.stringify(corps)});
+          await api('/api/notices/'+creee.id+'/soumettre', {method:'POST'});
+          await api('/api/notices/'+creee.id+'/valider', {method:'POST'});
+        }
+      }catch(e){ toast("Chargement du jeu de démonstration interrompu : "+e.message); }
+    });
     ANCRAGE=null; await chargerNoticesAdmin(); renderDonnees();
   };
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
-    if(!confirm('Supprimer cette notice ?')) return;
-    try{ await api('/api/notices/'+b.dataset.del, {method:'DELETE'}); }
-    catch(e){ alert("Suppression refusée par le serveur : "+e.message); return; }
-    ANCRAGE=null; await chargerNoticesAdmin(); renderDonnees(); });
+    if(!await confirmerAction('Supprimer la notice', 'Cette notice sera définitivement supprimée du catalogue.', 'Supprimer')) return;
+    await avecChargement(b,'Suppression…',async()=>{
+      try{ await api('/api/notices/'+b.dataset.del, {method:'DELETE'}); }
+      catch(e){ toast("Suppression refusée par le serveur : "+e.message); return; }
+      ANCRAGE=null; await chargerNoticesAdmin(); renderDonnees();
+    }); });
   document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{
     DB.config=DB.config||{annotateur:UTILISATEUR.nomComplet||UTILISATEUR.nom,mode:'manuel',serie:SERIES[0],numero_jo:'',cote:''};
     ouvrirModif(b.dataset.mod); });
-  document.querySelectorAll('[data-soum]').forEach(b=>b.onclick=async()=>{
+  document.querySelectorAll('[data-soum]').forEach(b=>b.onclick=()=>avecChargement(b,'Envoi…',async()=>{
     try{ await api('/api/notices/'+b.dataset.soum+'/soumettre', {method:'POST'}); }
-    catch(e){ alert("Soumission refusée par le serveur : "+e.message); return; }
+    catch(e){ toast("Soumission refusée par le serveur : "+e.message); return; }
     await chargerNoticesAdmin(); renderDonnees();
-  });
+  }));
 }
 function tele(nom,contenu,mime){ const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([contenu],{type:mime})); a.download=nom; a.click(); URL.revokeObjectURL(a.href); }
@@ -2454,7 +2529,7 @@ ${items.map(n=>`<h2>${esc(tType(n.type))}${n.numero?' n° '+esc(n.numero):''} �
 <div class="acte">${esc(n.texte)}</div>`).join('')}
 <div class="pied">Transcription(s) établie(s) et certifiée(s) par les Archives Nationales du Cameroun — référence ${esc(ref)}. Seule la version publiée au Journal officiel fait foi. Empreinte vérifiable depuis l'onglet Intégrité.${tampon}</div>`;
   const w=window.open('','_blank');
-  if(!w){ alert("Le navigateur a bloqué l'ouverture de la fenêtre d'impression. Autorisez les fenêtres pop-up pour ce site, puis réessayez."); return; }
+  if(!w){ toast("Le navigateur a bloqué l'ouverture de la fenêtre d'impression. Autorisez les fenêtres pop-up pour ce site, puis réessayez."); return; }
   w.document.write(doc); w.document.close(); w.focus(); w.print();
 }
 
@@ -2513,7 +2588,7 @@ ${items.map(n=>`<h2>${esc(tType(n.type))}${n.numero?' n° '+esc(n.numero):''} �
 <div class="page-scan">${n.image?`<img src="data:image/jpeg;base64,${n.image}" onerror="this.outerHTML='<p style=&quot;color:#900;border:1px dashed #900;padding:8px 10px&quot;>Image illisible pour cet acte : les données enregistrées sont corrompues ou incomplètes (souvent un signe que la mémoire de stockage du navigateur était pleine au moment de la saisie). Contactez les Archives Nationales pour signaler cette commande et reverser l\\'acte si possible.</p>'">`:'<p style="color:#900;border:1px dashed #900;padding:8px 10px">Image indisponible pour cet acte : aucun scan de page n\'a été conservé au traitement (saisie manuelle, ou acte ajouté au panier avant que l\'éligibilité ne soit vérifiée). Contactez les Archives Nationales pour signaler cette commande.</p>'}</div>`).join('')}
 <div class="pied">Scan(s) original(aux) fourni(s) tel(s) que reçu(s) au versement, sans retouche, par les Archives Nationales du Cameroun — référence ${esc(ref)}. Seule la version publiée au Journal officiel fait foi. Empreinte vérifiable depuis l'onglet Intégrité.${tampon}</div>`;
   const w=window.open('','_blank');
-  if(!w){ alert("Le navigateur a bloqué l'ouverture de la fenêtre d'impression. Autorisez les fenêtres pop-up pour ce site, puis réessayez."); return; }
+  if(!w){ toast("Le navigateur a bloqué l'ouverture de la fenêtre d'impression. Autorisez les fenêtres pop-up pour ce site, puis réessayez."); return; }
   w.document.write(doc); w.document.close(); w.focus(); w.print();
 }
 
@@ -2545,20 +2620,20 @@ function renderCommandes(){
       <td>${c.statut==='validee'?'Validée':'Refusée'+(c.motif_refus?' — '+esc(c.motif_refus):'')}</td>
       <td>${c.date_validation?esc(dfr(c.date_validation.slice(0,10))):'—'}</td></tr>`).join('')}
     </table></div>`:''}`;
-  document.querySelectorAll('[data-val]').forEach(b=>b.onclick=async()=>{
+  document.querySelectorAll('[data-val]').forEach(b=>b.onclick=()=>avecChargement(b,'Validation…',async()=>{
     try{ await api('/api/commandes/'+b.dataset.val+'/valider', {method:'POST'}); }
-    catch(e){ alert("Validation refusée par le serveur : "+e.message); return; }
+    catch(e){ toast("Validation refusée par le serveur : "+e.message); return; }
     await chargerCommandesAdmin(); renderCommandes();
-  });
+  }));
   document.querySelectorAll('[data-ref]').forEach(b=>b.onclick=()=>{ editRefus=b.dataset.ref; renderCommandes(); });
   document.querySelectorAll('[data-refno]').forEach(b=>b.onclick=()=>{ editRefus=null; renderCommandes(); });
-  document.querySelectorAll('[data-refok]').forEach(b=>b.onclick=async()=>{
+  document.querySelectorAll('[data-refok]').forEach(b=>b.onclick=()=>avecChargement(b,'Envoi…',async()=>{
     const id=b.dataset.refok, motif=document.getElementById('mr-'+id).value.trim();
-    if(!motif){ alert('Un motif est requis pour refuser une commande.'); return; }
+    if(!motif){ toast('Un motif est requis pour refuser une commande.'); return; }
     try{ await api('/api/commandes/'+id+'/refuser', {method:'POST', body:JSON.stringify({motif})}); }
-    catch(e){ alert("Refus impossible côté serveur : "+e.message); return; }
+    catch(e){ toast("Refus impossible côté serveur : "+e.message); return; }
     editRefus=null; await chargerCommandesAdmin(); renderCommandes();
-  });
+  }));
 }
 
 // ══════════════════════════════════════════════════ ADRESSES ET NAVIGATION
@@ -3541,7 +3616,7 @@ function panneauCle(){
 }
 function attacherPanneauCle(){
   const chg=document.getElementById('cle-chg'); if(chg) chg.onclick=()=>{MONTRER_CLE=true;renderAssistant()};
-  const rz=document.getElementById('cle-rz'); if(rz) rz.onclick=async()=>{ if(confirm('Retirer la clé API enregistrée ?')){ await saveGemini(''); MONTRER_CLE=false; renderAssistant(); } };
+  const rz=document.getElementById('cle-rz'); if(rz) rz.onclick=async()=>{ if(await confirmerAction('Retirer la clé API', 'La clé Gemini enregistrée dans ce navigateur sera effacée. L\'assistant reviendra à la recherche par mots-clés.', 'Retirer')){ await saveGemini(''); MONTRER_CLE=false; renderAssistant(); } };
   const ok=document.getElementById('cle-ok'); if(ok) ok.onclick=async()=>{ await saveGemini(document.getElementById('cle-in').value.trim()); MONTRER_CLE=false; renderAssistant(); };
   const no=document.getElementById('cle-no'); if(no) no.onclick=()=>{MONTRER_CLE=false;renderAssistant()};
 }
@@ -3749,7 +3824,7 @@ function renderCmd(){
     <p class="hint">Les recettes des services de l'État sont encaissées par le Trésor public. Le paiement s'effectue sur la plateforme ${REGIE.plateforme}, quel que soit le canal retenu ; les Archives Nationales n'encaissent pas directement et délivrent une quittance.</p>
     ${UTILISATEUR&&UTILISATEUR.role===ROLE_PUBLIC?`<p class="hint" style="margin:0 0 8px">Commande enregistrée au nom de <b>${esc(UTILISATEUR.nomComplet||UTILISATEUR.nom)}</b>.</p>`
       :`<div class="row" style="border:0;padding:6px 0 14px"><p class="hint" style="margin:0">Un compte est requis pour passer commande et en suivre la validation. <button class="b" id="cmd-cnx" style="margin-left:6px">Se connecter / Créer un compte</button></p></div>`}
-    <div class="actions"><button class="b pri" id="pay" ${UTILISATEUR&&UTILISATEUR.role===ROLE_PUBLIC?'':'disabled'}>Émettre l'ordre de recette et payer ${fcfa(totalC())}</button></div>
+    <div class="actions"><button class="b pri" id="pay" ${(UTILISATEUR&&UTILISATEUR.role===ROLE_PUBLIC&&!PROG.length)?'':'disabled'}>${PROG.length?'Traitement du paiement…':`Émettre l'ordre de recette et payer ${fcfa(totalC())}`}</button></div>
     ${PROG.length?`<div style="margin-top:14px">${PROG.map(s=>`<div class="prog">✓ ${esc(s)}</div>`).join('')}</div>`:''}</div>
   <div class="card"><h2>Ce qui est simulé</h2>
     <p class="sub" style="margin-bottom:0">Le parcours, la tarification, les différences de flux et la génération des fichiers sont réels. Aucun paiement n'est effectué, aucune donnée bancaire collectée ; les taux de frais sont indicatifs. Une mise en service suppose un compte marchand, un contrat d'agrégation couvrant MTN et Orange en une intégration, un prestataire pour les cartes, et une régie de recettes conforme à la comptabilité publique. Le développement est la partie courte ; les conventions sont la partie longue.</p></div>`;
@@ -3781,7 +3856,7 @@ function payer(){
       // Si le serveur refuse (acte plus disponible entretemps, session expirée…), on arrête la
       // simulation avant la quittance plutôt que de faire croire à une commande qui n'existe pas.
       try{ await api('/api/commandes', {method:'POST', body:JSON.stringify({actes_ids:[...PANIER], offre:OFFRE})}); }
-      catch(e){ alert("La commande n'a pas pu être enregistrée : "+e.message); PROG=[]; renderCmd(); return; }
+      catch(e){ toast("La commande n'a pas pu être enregistrée : "+e.message); PROG=[]; renderCmd(); return; }
       MESCMD_CHARGE=false;
     }
     PROG.push(s);
