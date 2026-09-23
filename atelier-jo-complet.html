@@ -257,7 +257,7 @@ const KEY_SESSION='atelier-jo-session', KEY_GEMINI='atelier-jo-cle-gemini';
 let UTILISATEUR=null;
 let LOGIN_CONTEXTE=null; // 'stagiaire' quand la connexion est atteinte par le raccourci dédié, pour adapter le message
 const PERMISSIONS={
-  admin:      ['versement','tele','saisie','mesures','donnees','commandes','controle'],
+  admin:      ['versement','tele','saisie','mesures','donnees','commandes','controle','comptes'],
   operateur:  ['versement','tele','saisie','mesures','donnees'],
   controleur: ['versement','tele','saisie','mesures','donnees','controle'],
   stagiaire:  ['versement','tele','saisie','donnees'],
@@ -270,7 +270,7 @@ const ROLES=[['admin','Administrateur'],['operateur','Opérateur'],['controleur'
 const ROLE_PUBLIC='chercheur';
 
 const TABS={
-  admin:[['versement','Versement'],['tele','Numériser et traiter'],['saisie','Saisie'],['controle','Contrôle qualité'],['mesures','Mesures'],['donnees','Données'],['commandes','Commandes']],
+  admin:[['versement','Versement'],['tele','Numériser et traiter'],['saisie','Saisie'],['controle','Contrôle qualité'],['mesures','Mesures'],['donnees','Données'],['commandes','Commandes'],['comptes','Comptes']],
   opac:[['accueil','Accueil'],['rech','Rechercher'],['classement','Plan de classement'],['instr','Instruments de recherche'],['chrono','Chronologie'],['thes','Thésaurus'],['assist','Assistant'],['integ','Intégrité'],['normes','Normes'],['cmd','Commander'],['mescommandes','Mes commandes']]
 };
 const SERIES=['Amtsblatt für das Schutzgebiet Kamerun (1908-1914)','JO du Cameroun — mandat/tutelle française (1920-1959)',
@@ -394,6 +394,13 @@ async function chargerCommandesAdmin(){
   try{ const r=await fetch('/api/commandes',{credentials:'include'}); if(r.ok) COMMANDES_ADMIN=await r.json(); }
   catch(e){ toast("Liste des commandes indisponible : le serveur n'a pas répondu. Réessayez ou vérifiez votre connexion.",'err'); }
 }
+// Comptes internes (admin, opérateur, contrôleur, stagiaire), pour l'onglet Comptes — admin uniquement,
+// comme côté serveur (voir comptes.routes.js : router.use(authentifier, autoriser('admin'))).
+let COMPTES=[], COMPTES_CHARGE=false;
+async function chargerComptes(){
+  try{ const r=await fetch('/api/comptes',{credentials:'include'}); if(r.ok) COMPTES=await r.json(); }
+  catch(e){ toast("Liste des comptes indisponible : le serveur n'a pas répondu. Réessayez ou vérifiez votre connexion.",'err'); }
+}
 // Centralise l'appel à l'API (notices, versements, commandes...) : ajoute les identifiants de
 // session, lit un message d'erreur lisible renvoyé par le serveur au lieu de se fier au seul
 // masquage des boutons côté client (un rôle qui n'a pas le droit reçoit un message clair, pas
@@ -491,7 +498,7 @@ async function logout(){
   // par un agent interne) : une nouvelle session, même sur le même poste, ne doit jamais hériter
   // de ce qu'a chargé la précédente.
   MES_COMMANDES=[]; MESCMD_CHARGE=false; COMMANDES_ADMIN=[]; CMDADMIN_CHARGE=false;
-  NOTICES_ADMIN=[]; ADMIN_CHARGE=false;
+  NOTICES_ADMIN=[]; ADMIN_CHARGE=false; COMPTES=[]; COMPTES_CHARGE=false;
   if(!public_){ ESPACE='admin'; VUE='versement'; }
   sync();
 }
@@ -691,6 +698,7 @@ function sync(){
   if(ESPACE==='admin' && !ADMIN_CHARGE){ ADMIN_CHARGE=true; chargerNoticesAdmin().then(sync); }
   if(ESPACE==='opac' && UTILISATEUR && UTILISATEUR.role===ROLE_PUBLIC && !MESCMD_CHARGE){ MESCMD_CHARGE=true; chargerMesCommandes().then(sync); }
   if(ESPACE==='admin' && UTILISATEUR && UTILISATEUR.role==='admin' && !CMDADMIN_CHARGE){ CMDADMIN_CHARGE=true; chargerCommandesAdmin().then(sync); }
+  if(ESPACE==='admin' && UTILISATEUR && UTILISATEUR.role==='admin' && !COMPTES_CHARGE){ COMPTES_CHARGE=true; chargerComptes().then(sync); }
 
   const onglets = ESPACE==='admin' ? TABS.admin.filter(([k])=>PERMISSIONS[UTILISATEUR.role].includes(k))
     : TABS.opac.filter(([k])=> k!=='mescommandes' || (UTILISATEUR&&UTILISATEUR.role===ROLE_PUBLIC));
@@ -704,13 +712,13 @@ function sync(){
     // onglet : sans ça, ADMIN_CHARGE/CMDADMIN_CHARGE ne se chargeraient qu'une fois à l'entrée
     // dans l'espace Administration, et un contrôleur resté sur un autre onglet ne verrait jamais
     // une nouvelle fiche arriver dans Contrôle qualité sans recharger toute la page.
-    if(ESPACE==='admin'){ ADMIN_CHARGE=false; CMDADMIN_CHARGE=false; }
+    if(ESPACE==='admin'){ ADMIN_CHARGE=false; CMDADMIN_CHARGE=false; COMPTES_CHARGE=false; }
     sync();
   });
   document.getElementById('who').textContent = DB.config ? DB.config.annotateur+' · '+DB.config.mode
     : (ESPACE==='admin' ? NOTICES_ADMIN.length : NOTICES_OPAC.length)+' notice(s)';
   if(ESPACE==='opac' && PUBLIC_AUTH && !UTILISATEUR) renderAuthPublic();
-  else ({versement:renderVersement,tele:renderTele,saisie:renderSaisie,controle:renderControle,mesures:renderMesures,donnees:renderDonnees,commandes:renderCommandes,
+  else ({versement:renderVersement,tele:renderTele,saisie:renderSaisie,controle:renderControle,mesures:renderMesures,donnees:renderDonnees,commandes:renderCommandes,comptes:renderComptes,
     accueil:renderAccueil,rech:renderRech,classement:renderClassement,instr:renderInstr,chrono:renderChrono,thes:renderThes,assist:renderAssistant,
     integ:renderInteg,normes:renderNormes,cmd:renderCmd,mescommandes:renderMesCommandes})[VUE]();
   traduireDOM();
@@ -969,6 +977,7 @@ Object.assign(EN,{
 "Cliquez sur une série pour la parcourir.":"Click a series to browse it.",
 "Communication libre, sauf délais de 30, 60, 100, 120 et 150 ans selon la matière":"Freely communicable, subject to time limits of 30, 60, 100, 120 and 150 years depending on subject matter",
 "Composant commercial embarqué":"Embedded commercial component",
+"Comptes":"Accounts",
 "Comptes de connexion à l'espace Administration. Rappel : ceci reste une connexion légère côté prototype — identifiants et mots de passe sont stockés tels quels dans ce fichier, ce n'est pas une sécurité réelle.":"Login accounts for the Administration area. Reminder: this remains a lightweight, prototype-side login — usernames and passwords are stored as plain text in this file, this is not real security.",
 "Concerne les magasins de Yaoundé et de Buea, non le logiciel":"Concerns the Yaoundé and Buea repositories, not the software",
 "Connexion locale à ce poste, à des fins d'organisation du travail : ce n'est pas un compte sécurisé au sens strict, les identifiants restent lisibles dans ce fichier. La sécurité réelle des accès sera mise en place avec le prochain projet.":"Local login on this machine, for work-organisation purposes only: this is not a strictly secure account, the credentials remain readable in this file. Real access security will be put in place with the next project.",
@@ -2634,6 +2643,60 @@ function renderCommandes(){
     catch(e){ toast("Refus impossible côté serveur : "+e.message); return; }
     editRefus=null; await chargerCommandesAdmin(); renderCommandes();
   }));
+}
+
+// ══════════════════════════════════════════════════ 7. COMPTES (admin seulement)
+// Miroir de comptes.routes.js : les 4 rôles internes se créent ici, jamais « chercheur » qui naît
+// de l'inscription publique (formulaire « Créer un compte » du catalogue). Le serveur refuse de
+// toute façon un rôle hors de cette liste — voir ROLES_VALIDES côté API.
+const ROLES_INTERNES = ROLES.filter(([r])=>r!==ROLE_PUBLIC);
+function renderComptes(){
+  app.innerHTML=`
+  <div class="card"><h2>Nouveau compte</h2>
+    <p class="sub">Réservé aux rôles internes des Archives. Un chercheur du catalogue public crée son propre compte depuis « Créer un compte », jamais ici.</p>
+    <div class="row"><label class="lb">Nom complet</label><div><input id="cp-nom" autocomplete="off"></div></div>
+    <div class="row"><label class="lb">Email</label><div><input id="cp-email" type="email" autocomplete="off"></div></div>
+    <div class="row"><label class="lb">Mot de passe</label><div><input id="cp-mdp" type="password" autocomplete="new-password"></div></div>
+    <div class="row"><label class="lb">Rôle</label><div><select id="cp-role">${ROLES_INTERNES.map(([r,l])=>`<option value="${r}">${esc(l)}</option>`).join('')}</select></div></div>
+    <div id="cp-err" class="hint" style="color:var(--red)"></div>
+    <div class="actions"><button class="b pri" id="cp-go">Créer le compte</button></div>
+  </div>
+  <div class="card"><h2>Comptes existants</h2>
+    ${COMPTES.length?`<table><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Créé le</th><th></th></tr>
+      ${COMPTES.map(c=>{
+        const lib=(ROLES.find(r=>r[0]===c.role)||[,c.role])[1];
+        const soi=c.id===UTILISATEUR.id;
+        return `<tr><td>${esc(c.nom)}${soi?' <span style="color:var(--ink3)">(vous)</span>':''}</td><td>${esc(c.email)}</td><td>${esc(lib)}</td>
+          <td style="color:${c.actif?'var(--green)':'var(--ink3)'}">${c.actif?'actif':'inactif'}</td>
+          <td>${esc(dfr((c.cree_le||'').slice(0,10)))}</td>
+          <td style="white-space:nowrap">${soi?'':`<button class="b" style="padding:3px 9px;font-size:12px" data-toggle="${c.id}" data-actif="${c.actif?1:0}">${c.actif?'Désactiver':'Réactiver'}</button>`}</td></tr>`;
+      }).join('')}
+      </table>`:'<p class="empty">Aucun compte.</p>'}
+  </div>`;
+
+  const cpGo=document.getElementById('cp-go');
+  cpGo.onclick=()=>avecChargement(cpGo,'Création…',async()=>{
+    const nom=document.getElementById('cp-nom').value.trim(), email=document.getElementById('cp-email').value.trim(),
+      mot_de_passe=document.getElementById('cp-mdp').value, role=document.getElementById('cp-role').value;
+    const err=document.getElementById('cp-err'); err.textContent='';
+    if(!nom||!email||!mot_de_passe){ err.textContent='Nom, email et mot de passe sont requis.'; return; }
+    try{ await api('/api/comptes', {method:'POST', body:JSON.stringify({nom,email,mot_de_passe,role})}); }
+    catch(e){ err.textContent=e.message; return; }
+    COMPTES_CHARGE=false; await chargerComptes(); renderComptes();
+    toast(`Compte créé pour ${nom}.`,'ok');
+  });
+
+  document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.toggle, actif=b.dataset.actif==='1';
+    // Seule la désactivation est destructive (coupe l'accès de quelqu'un) : une confirmation est
+    // requise. La réactiver redonne simplement l'accès, sans besoin de le confirmer.
+    if(actif && !await confirmerAction('Désactiver le compte', "Ce compte ne pourra plus se connecter tant qu'il n'est pas réactivé.", 'Désactiver')) return;
+    await avecChargement(b, actif?'Désactivation…':'Réactivation…', async()=>{
+      try{ await api('/api/comptes/'+id+'/'+(actif?'desactiver':'reactiver'), {method:'PATCH'}); }
+      catch(e){ toast((actif?'Désactivation':'Réactivation')+" refusée par le serveur : "+e.message); return; }
+      COMPTES_CHARGE=false; await chargerComptes(); renderComptes();
+    });
+  });
 }
 
 // ══════════════════════════════════════════════════ ADRESSES ET NAVIGATION
