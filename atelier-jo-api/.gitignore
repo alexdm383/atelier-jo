@@ -3,3 +3,9 @@ node_modules/
 atelier-jo.db
 atelier-jo.db-*
 public/*.html
+
+# Mots de passe en clair générés par creer-comptes-en-masse.js — jamais commités.
+# Motif général (pas seulement comptes-a-creer-MOTS-DE-PASSE.csv) : le script produit ce
+# suffixe à partir du nom du CSV source donné en argument, quel qu'il soit (ex. ici
+# stagiaires-a-creer-MOTS-DE-PASSE.csv).
+*-MOTS-DE-PASSE.csv
