@@ -10,6 +10,9 @@ app.use(cookieParser());
 
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/notices', require('./routes/notices.routes'));
+// Monté avant comptes.routes.js (réservé admin) : /api/comptes/moi/theme-stage est
+// la seule route de ce préfixe accessible à un compte non-admin (le sien uniquement).
+app.use('/api/comptes', require('./routes/comptes-moi.routes'));
 app.use('/api/comptes', require('./routes/comptes.routes'));
 app.use('/api/versements', require('./routes/versements.routes'));
 // Pas de préfixe commun unique (POST /api/commandes, GET /api/mes-commandes,

@@ -72,7 +72,11 @@ router.post('/deconnexion', (req, res) => {
 });
 
 router.get('/moi', authentifier, (req, res) => {
-  res.json(req.user);
+  // req.user (issu du jeton signé à la connexion) n'a que {id,nom,role} : theme_stage
+  // peut changer sans qu'un nouveau jeton soit émis, donc lu frais en base ici plutôt
+  // qu'ajouté au jeton — id/nom/role renvoyés restent exactement ceux du jeton, inchangés.
+  const ligne = db.prepare('SELECT theme_stage FROM comptes WHERE id = ?').get(req.user.id);
+  res.json({ ...req.user, theme_stage: (ligne && ligne.theme_stage) || null });
 });
 
 module.exports = router;

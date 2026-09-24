@@ -29,10 +29,18 @@ function versVue(ligne) {
 // voulu pour le travail de catalogage, mais ça veut dire que cette route ne
 // doit être appelée avec une session que depuis l'espace Administration.
 router.get('/', authentifierOptionnel, (req, res) => {
-  const estAgentInterne = req.user && req.user.role !== 'chercheur';
-  const lignes = estAgentInterne
-    ? db.prepare('SELECT * FROM notices ORDER BY modifie_le DESC').all()
-    : db.prepare("SELECT * FROM notices WHERE statut = 'validee' ORDER BY modifie_le DESC").all();
+  let lignes;
+  if (req.user && req.user.role === 'stagiaire') {
+    // Catalogue de travail personnel : le stagiaire ne voit que ses propres notices,
+    // tous statuts confondus (brouillon compris, c'est son espace privé) — jamais
+    // celles d'un autre stagiaire. Comportement des autres rôles inchangé ci-dessous.
+    lignes = db.prepare('SELECT * FROM notices WHERE auteur_id = ? ORDER BY modifie_le DESC').all(req.user.id);
+  } else {
+    const estAgentInterne = req.user && req.user.role !== 'chercheur';
+    lignes = estAgentInterne
+      ? db.prepare('SELECT * FROM notices ORDER BY modifie_le DESC').all()
+      : db.prepare("SELECT * FROM notices WHERE statut = 'validee' ORDER BY modifie_le DESC").all();
+  }
   res.json(lignes.map(versVue));
 });
 

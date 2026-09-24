@@ -527,13 +527,47 @@ function renderLogin(){
         data=await r.json();
       }catch(e){ err.textContent="Impossible de joindre le serveur. Vérifiez votre connexion."; return; }
       if(!r.ok){ err.textContent=data.erreur||'Connexion refusée.'; return; }
-      UTILISATEUR=data; await saveSession(); LOGIN_CONTEXTE=null;
+      UTILISATEUR=data;
+      // data (réponse de /connexion) n'a que {id,nom,role} : le stagiaire a besoin de
+      // theme_stage pour savoir s'il doit le renseigner (voir sync()) — /moi l'inclut,
+      // /connexion non (comportement de /connexion inchangé, voir contrainte de cette passe).
+      // Ignoré pour les autres rôles : aucun changement de comportement/latence pour eux.
+      if(data.role==='stagiaire'){ const moi=await chargerSessionServeur(); if(moi) UTILISATEUR=moi; }
+      await saveSession(); LOGIN_CONTEXTE=null;
       VUE=data.role==='controleur'?'controle':'versement'; sync();
     });
   };
   document.getElementById('lg-go').onclick=go;
   document.getElementById('lg-mdp').onkeydown=e=>{ if(e.key==='Enter') go(); };
   document.getElementById('lg-email').focus();
+}
+// Bloquant, uniquement pour un stagiaire dont theme_stage est vide (voir sync()) — jamais
+// pour un autre rôle, jamais une fois déjà renseigné. Même langage visuel que
+// confirmerAction (.modalOverlay/.modalBox), mais sans option d'annuler : contrairement à
+// une confirmation, ce n'est pas une action qu'on peut refuser et laisser de côté.
+function renderThemeStageRequis(){
+  app.innerHTML='';
+  const hote=document.getElementById('modalHost');
+  hote.innerHTML=`<div class="modalOverlay"><div class="modalBox" role="alertdialog" aria-modal="true" aria-labelledby="theme-titre">
+    <h2 id="theme-titre">Thème de stage</h2>
+    <p>Avant de continuer, renseignez le thème de votre stage. Il ne pourra plus être modifié depuis cet écran une fois enregistré.</p>
+    <div class="row" style="border:0;padding:0 0 14px"><label class="lb">Thème</label><div><input id="theme-stage-in" placeholder="ex. Le traitement du Journal officiel colonial"></div></div>
+    <div id="theme-stage-err" class="hint" style="color:var(--red)"></div>
+    <div class="actions"><button class="b pri" id="theme-stage-go">Enregistrer</button></div>
+  </div></div>`;
+  const go=document.getElementById('theme-stage-go');
+  go.onclick=()=>avecChargement(go,'Enregistrement…',async()=>{
+    const valeur=document.getElementById('theme-stage-in').value.trim();
+    const err=document.getElementById('theme-stage-err'); err.textContent='';
+    if(!valeur){ err.textContent='Le thème de stage est requis.'; return; }
+    try{ await api('/api/comptes/moi/theme-stage', {method:'PATCH', body:JSON.stringify({theme_stage:valeur})}); }
+    catch(e){ err.textContent=e.message; return; }
+    UTILISATEUR.theme_stage=valeur; await saveSession();
+    document.getElementById('modalHost').innerHTML='';
+    sync();
+  });
+  document.getElementById('theme-stage-in').onkeydown=e=>{ if(e.key==='Enter') go.click(); };
+  document.getElementById('theme-stage-in').focus();
 }
 
 // ══════════════════════════════════════════════════ SAUVEGARDE PERSONNELLE (mode memoryOnly)
@@ -680,6 +714,19 @@ function sync(){
   majAuthUI();
   majNavAuth();
   majSauvegarde();
+
+  // Un stagiaire sans thème de stage renseigné doit le renseigner avant de continuer,
+  // quel que soit l'espace visé — jamais pour un autre rôle, jamais une fois déjà
+  // renseigné (voir PATCH /api/comptes/moi/theme-stage, à usage unique). Se déconnecter
+  // reste possible : majAuthUI() ci-dessus a déjà posé le bouton, hors de #tabs/#app.
+  if(UTILISATEUR && UTILISATEUR.role==='stagiaire' && !UTILISATEUR.theme_stage){
+    document.getElementById('tabs').innerHTML='';
+    document.getElementById('who').textContent='—';
+    renderThemeStageRequis();
+    traduireDOM();
+    majURL();
+    return;
+  }
 
   if(ESPACE==='admin' && (!UTILISATEUR || UTILISATEUR.role===ROLE_PUBLIC)){
     if(UTILISATEUR){ ESPACE='opac'; VUE=TABS.opac[0][0]; return sync(); }
@@ -2403,6 +2450,12 @@ function renderDonnees(){
   app.innerHTML=`
   <div class="card"><h2>Exporter</h2><p class="sub">Le catalogue est désormais partagé directement par le serveur — cet export ne sert plus qu'à garder une copie personnelle hors ligne, pas à faire rejoindre votre travail au catalogue commun (déjà fait automatiquement à chaque enregistrement).</p>
     <div class="actions"><button class="b pri" id="ej">Export JSON</button><button class="b" id="ec">Export CSV</button></div></div>
+  ${stg?`
+  <div class="card" style="border-left:3px solid var(--blue)"><h2>Mon instrument de recherche</h2>
+    <p class="sub">Construit uniquement à partir de vos propres notices ci-dessous (${N.length} pièce(s)) — jamais celles d'un autre stagiaire.</p>
+    <dl class="dl"><dt>Thème de stage</dt><dd>${esc(UTILISATEUR.theme_stage||'—')}</dd>
+      <dt>Stagiaire</dt><dd>${esc(UTILISATEUR.nomComplet||UTILISATEUR.nom)}</dd></dl>
+    <div class="actions"><button class="b pri" id="dl-instr-perso" ${N.length?'':'disabled'}>Télécharger l'instrument — Word</button></div></div>`:''}
   ${admin?`
   <div class="card"><h2>Jeu de démonstration</h2>
     <p class="sub">Huit notices du JO spécial n° 4 du 1<sup>er</sup> mars 2024, pour démarrer un cours sur un catalogue déjà alimenté. Créées, soumises puis validées via l'API, comme n'importe quelle notice.</p>
@@ -2459,6 +2512,40 @@ function renderDonnees(){
     catch(e){ toast("Soumission refusée par le serveur : "+e.message); return; }
     await chargerNoticesAdmin(); renderDonnees();
   }));
+  const dlPerso=document.getElementById('dl-instr-perso');
+  if(dlPerso) dlPerso.onclick=()=>{
+    const blob=genererInstrumentPersonnel(N);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='instrument-personnel-'+new Date().toISOString().slice(0,10)+'.docx';
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+}
+// Instrument de recherche personnel d'un stagiaire : construit uniquement à partir de N, déjà
+// filtré à ses propres notices par le serveur (voir GET /api/notices, notices.routes.js) — pas
+// une nouvelle route, la liste déjà chargée par renderDonnees() suffit. Réutilise genererDocx(),
+// déjà générique (voir renderInstr()), sans toucher aux 8 instruments du catalogue public : ceux-là
+// restent construits sur OPAC() (notices validées uniquement) et leur propre machinerie thématique,
+// hors de propos pour un espace de travail personnel qui inclut aussi les brouillons.
+function genererInstrumentPersonnel(N){
+  const tp=[
+    ['Stagiaire',UTILISATEUR.nomComplet||UTILISATEUR.nom],
+    ['Thème de stage',UTILISATEUR.theme_stage||'non renseigné'],
+    ['Institution','Archives Nationales du Cameroun'],
+    ['Pièces décrites',String(N.length)],
+    ["Date d'élaboration",new Date().toLocaleDateString('fr-FR')],
+  ];
+  const lignes=N.map(n=>[
+    [n.serie,n.numero_jo,n.cote].filter(Boolean).join(' · ')||'—',
+    tType(n.type)||'—',
+    ((LANG==='en'?(n.intitule_en||n.intitule_fr):(n.intitule_fr||n.intitule_en))||'').slice(0,60)||'—',
+    n.statut==='validee'?'validée':n.statut==='a_valider'?'à valider':'brouillon',
+  ]);
+  const R=[
+    ['p',`Instrument de recherche personnel, établi pour le suivi du stage sur le thème « ${UTILISATEUR.theme_stage||'non renseigné'} ». Ne recense que les pièces décrites par ce stagiaire, tous statuts confondus (brouillon compris).`],
+    ['t',[['Cote','Type','Intitulé','Statut'],lignes]],
+  ];
+  const pied="Instrument de recherche personnel — document de suivi de stage, Archives Nationales du Cameroun. Ne se substitue pas aux instruments de recherche du catalogue public, réservés aux notices validées.";
+  return genererDocx('Instrument de recherche personnel — '+(UTILISATEUR.theme_stage||'stage'), tp, [], R, pied);
 }
 function tele(nom,contenu,mime){ const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([contenu],{type:mime})); a.download=nom; a.click(); URL.revokeObjectURL(a.href); }

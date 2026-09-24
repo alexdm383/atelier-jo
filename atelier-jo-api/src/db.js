@@ -93,4 +93,13 @@ CREATE TABLE IF NOT EXISTS commandes (
 CREATE INDEX IF NOT EXISTS idx_commandes_compte ON commandes(compte_id);
 `);
 
+// Migration additive : CREATE TABLE IF NOT EXISTS ci-dessus ne touche pas une table
+// comptes déjà existante, donc une nouvelle colonne s'ajoute ici, seulement si elle
+// manque encore — jamais de DROP ni de recréation, les lignes existantes (tous
+// rôles) restent intactes, theme_stage y reste simplement NULL.
+const colonnesComptes = db.prepare("PRAGMA table_info(comptes)").all().map((c) => c.name);
+if (!colonnesComptes.includes('theme_stage')) {
+  db.exec('ALTER TABLE comptes ADD COLUMN theme_stage TEXT');
+}
+
 module.exports = db;
