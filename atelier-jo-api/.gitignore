@@ -9,3 +9,8 @@ public/*.html
 # suffixe à partir du nom du CSV source donné en argument, quel qu'il soit (ex. ici
 # stagiaires-a-creer-MOTS-DE-PASSE.csv).
 *-MOTS-DE-PASSE.csv
+
+# Listes sources (noms, emails personnels, rôles) pour creer-comptes-en-masse.js — retirées
+# du dépôt après coup, ne pas les recommitter par erreur au prochain lot.
+comptes-a-creer.csv
+stagiaires-a-creer.csv
