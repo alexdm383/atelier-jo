@@ -886,7 +886,7 @@ const EN={
 "Conformité aux normes":"Standards compliance","Ce qui manque encore":"What is still missing",
 "Acte":"Act","Année de signature":"Year of signature","Autorité":"Authority",
 "État de la description":"Description status","Description complète":"Complete description",
-"Description à compléter":"Description to be completed","Thème":"Subject","Retour aux résultats":"Back to results"
+"Description à compléter":"Description to be completed","Thème":"Subject","Lieu":"Place","Organisme":"Organisation","Personne":"Person","Retour aux résultats":"Back to results"
 };
 Object.assign(EN,{
 "1 — Numériser ou téléverser":"1 — Digitize or upload",
@@ -3060,7 +3060,7 @@ function renderAccueil(){
 }
 
 // ══════════════════════════════════════════════════ 5. OPAC — RECHERCHE
-let q='',F={type:new Set(),autorite:new Set(),annee:new Set(),th:new Set(),etat:new Set()},ouvert=null;
+let q='',F={type:new Set(),autorite:new Set(),annee:new Set(),th:new Set(),etat:new Set(),geo:new Set(),org:new Set(),pers:new Set()},ouvert=null;
 function corresp(n){
   if(q){ const h=norm([n.intitule,n.resume,n.numero,n.autorite,n.th.join(' '),n.geo.join(' '),n.pers.join(' '),n.org.join(' '),n.abroge].join(' '));
     if(!norm(q).split(/\s+/).filter(Boolean).every(t=>h.includes(t))) return false; }
@@ -3069,10 +3069,13 @@ function corresp(n){
   if(F.annee.size&&!F.annee.has((n.ds||'????').slice(0,4)))return false;
   if(F.etat.size&&!F.etat.has(n.complet?'Description complète':'Description à compléter'))return false;
   if(F.th.size&&!n.th.some(t=>F.th.has(t)))return false;
+  if(F.geo.size&&!n.geo.some(t=>F.geo.has(t)))return false;
+  if(F.org.size&&!n.org.some(t=>F.org.has(t)))return false;
+  if(F.pers.size&&!n.pers.some(t=>F.pers.has(t)))return false;
   return true;
 }
 function facette(k,lb,L){
-  const m={}; L.forEach(n=>{ const v = k==='annee'?[(n.ds||'????').slice(0,4)] : k==='th'?n.th
+  const m={}; L.forEach(n=>{ const v = k==='annee'?[(n.ds||'????').slice(0,4)] : ['th','geo','org','pers'].includes(k)?n[k]
     : k==='etat'?[n.complet?'Description complète':'Description à compléter'] : [n[k]||'—'];
     v.forEach(x=>m[x]=(m[x]||0)+1); });
   const e=Object.entries(m).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
@@ -3091,6 +3094,7 @@ function renderRech(){
     ${a?`<button class="clear" id="clr">Réinitialiser les ${a} filtres</button>`:''}
     ${facette('type',"Type d'acte",L)}${facette('annee','Année de signature',L)}
     ${facette('autorite','Autorité',L)}${facette('etat','État de la description',L)}${facette('th','Thème',L)}
+    ${facette('geo','Lieu',L)}${facette('org','Organisme',L)}${facette('pers','Personne',L)}
   </aside><section>
     ${PANIER.size?`<div class="pan">${t(`Panier : ${PANIER.size} acte(s)`,`Selection: ${PANIER.size} act(s)`)}
       <button id="voirp">${t('Voir','View')}</button><button id="videp">${t('Vider','Clear')}</button></div>`:''}
@@ -3806,8 +3810,12 @@ function renderThes(){
     ${B.map(([k,lb])=>{ const m={}; L.forEach(n=>n[k].forEach(v=>m[v]=(m[v]||0)+1));
       const e=Object.entries(m).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
       return `<h3 style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:20px 0 10px">${lb} — ${e.length} terme(s)</h3>
-      <div class="thlist">${e.length?e.map(([v,c])=>`<span class="thitem" ${k==='th'?`data-t="${esc(v)}"`:''}>${esc(v)}<b>${c}</b></span>`).join(''):'<span style="color:var(--ink3);font-size:13.5px">—</span>'}</div>`;}).join('')}</div>`;
-  document.querySelectorAll('[data-t]').forEach(x=>x.onclick=()=>{F.th.clear();F.th.add(x.dataset.t);VUE='rech';ouvert=null;sync();scrollTo(0,0)});
+      <div class="thlist">${e.length?e.map(([v,c])=>`<span class="thitem" data-fk="${k}" data-fv="${esc(v)}">${esc(v)}<b>${c}</b></span>`).join(''):'<span style="color:var(--ink3);font-size:13.5px">—</span>'}</div>`;}).join('')}</div>`;
+  // Un clic dans le Thésaurus remet à zéro les quatre facettes qui en sont issues (th, geo, org, pers)
+  // avant de poser le terme cliqué : le résultat correspond alors exactement au nombre affiché à côté
+  // du terme, sans reste d'un clic précédent. Les facettes réglées directement dans Rechercher (type,
+  // autorité, année, état) ne sont pas touchées.
+  document.querySelectorAll('[data-fk]').forEach(x=>x.onclick=()=>{['th','geo','org','pers'].forEach(k=>F[k].clear());F[x.dataset.fk].add(x.dataset.fv);VUE='rech';ouvert=null;sync();scrollTo(0,0)});
 }
 
 // ══════════════════════════════════════════════════ 8. ASSISTANT
