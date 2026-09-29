@@ -1713,6 +1713,161 @@ function decouperFR(txt){
   });
 }
 
+// ══════════════════════════════════════════════════ REGISTRE DES MODÈLES DE RECONNAISSANCE
+// Un modèle par période de publication du JO, jamais deviné automatiquement — l'agent choisit
+// explicitement lequel appliquer (deux boutons dans l'onglet Numériser, voir renderTele()).
+// decouperFR() ci-dessus reste le modèle « moderne », strictement inchangé ; un futur modèle
+// s'ajoute ici sans toucher aux précédents ni à la structure elle-même.
+// Construit à l'étape 2, révisé à l'étape 2bis, sur le texte OCR réel du JO du Cameroun français,
+// 27e année N°532 du 1er janvier 1942 (aucune couche texte — pur scan, très bruité). Le numéro reste
+// TOUJOURS vide : il ne figure qu'au sommaire, jamais sur l'acte lui-même — aucune référence de
+// substitution n'est inventée ici.
+//
+// Correspondance TOLÉRANTE (distance de Levenshtein), pas une liste de déformations codées en dur :
+// une tolérance générale appliquée à toute la liste de mots-clés (TYPES_CANON_ANCIEN,
+// FORMULES_SIMPLES_ANCIEN, FORMULES_COMPOSEES_ANCIEN), plutôt qu'un dictionnaire de synonymes observés
+// au cas par cas comme à l'étape 2. Le seuil de tolérance est calculé sur le PLUS COURT des deux mots
+// comparés (mot testé vs mot-clé canonique), pas seulement le mot-clé : un fragment court, résidu d'un
+// mot coupé par un saut de ligne OCR (ex. "nant" pour "détermi-\nnant"), ne doit jamais pouvoir
+// consommer tout le budget de tolérance d'un mot-clé bien plus long ("fixant") — sinon deux
+// coïncidences courtes et indépendantes peuvent se combiner en un faux début d'acte (observé et
+// corrigé pendant la construction : "Log nant" matchait à tort "loi" + "fixant").
+function levenshteinAncien(a,b){
+  const m=a.length, n=b.length;
+  if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){
+    const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]= a[i-1]===b[j-1] ? prev[j-1] : 1+Math.min(prev[j-1],prev[j],cur[j-1]);
+    prev=cur;
+  }
+  return prev[n];
+}
+const sansAccentsAncien=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'');
+const seuilAncien=(a,b)=>Math.floor(Math.min(a.length,b.length)/2);
+const normAncien=w=>sansAccentsAncien(w.toLowerCase()).replace(/[^a-z]/g,'');
+const motProcheListeAncien=(motNorm,liste)=>liste.find(c=>levenshteinAncien(motNorm,c)<=seuilAncien(motNorm,c))||null;
+const motProcheTypeAncien=(motNorm,paires)=>{ const t=paires.find(([c])=>levenshteinAncien(motNorm,c)<=seuilAncien(motNorm,c)); return t?t[1]:null; };
+// Tolérant (>=80% capitales, pas 100%) : sur ce corpus, un mot autrement tout en capitales ressort
+// souvent avec une ou deux lettres mal reconnues en minuscule par l'OCR (« Li » pour « LIBRE »).
+const estCapitalesAncien=l=>{ const lettres=l.replace(/[^A-Za-zÀ-ÿ]/g,''); if(lettres.length<=4) return false;
+  const maj=lettres.replace(/[a-zà-ÿ]/g,'').length; return maj/lettres.length>=0.8; };
+// Un token d'UNE SEULE lettre (après nettoyage) est un artefact de bordure de colonne mal lu par
+// l'OCR (« i », « | », « ~ »), jamais un vrai mot.
+const estBruitTokenAncien=w=>w.replace(/[^A-Za-zÀ-ÿ]/g,'').length<=1;
+// Ligne de signature : « Lieu, le [j] mois AAAA[.,] » — très régulière même à travers le bruit OCR
+// (« Brazzaville, le 11 novembre 1941. », « Douala, le 8 décembre 1941, »).
+const SIGNATURE_ANCIEN=/([A-ZÀ-Ü][a-zà-ÿ'’-]+),\s*le\s+(\d{1,2})(?:er)?\s+([a-zûéèA-ZÛÉÈ]+)\s+(19\d{2})\s*[.,]?/g;
+const MOIS_ANCIEN={janvier:1,fevrier:2,'février':2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,'août':8,
+  septembre:9,octobre:10,novembre:11,decembre:12,'décembre':12};
+const isoDepuisAncien=(jour,mois,annee)=>{ const m=MOIS_ANCIEN[mois.toLowerCase()];
+  return (m&&jour&&annee) ? `${annee}-${String(m).padStart(2,'0')}-${String(jour).padStart(2,'0')}` : ''; };
+// Mots-clés canoniques SEULS (forme dictionnaire, sans accent) : plus de liste de déformations —
+// la tolérance de motProcheTypeAncien()/motProcheListeAncien() absorbe les variantes OCR.
+const TYPES_CANON_ANCIEN=[['decret','décret'],['arrete','arrêté'],['decision','décision'],['loi','loi'],
+  ['ordonnance','ordonnance'],['instruction','instruction']];
+const FORMULES_SIMPLES_ANCIEN=['instituant','portant','fixant','approuvant','autorisant','reglementant',
+  'determinant','modifiant','organisant'];
+const FORMULES_COMPOSEES_ANCIEN=['relatif','relative','tendant']; // exigent un « à/au/aux » juste après
+
+// page : numéro de la page DANS SON FICHIER (1 = première page de CE fichier PDF, pas du lot entier —
+// pagesDe() et la boucle équivalente de reconnaitreLocal() redémarrent p à 1 à chaque nouveau fichier
+// de la sélection, voir ces deux fonctions). La première page d'un fichier est présumée être la page
+// de sommaire, par convention de cette publication — elle liste chaque acte au même format « Type
+// formule objet » qu'un vrai titre, sans jamais son corps juridique, ce qui la rend indiscernable d'un
+// vrai acte par le texte seul (essayé : un marqueur « PARTIE OFFICIELLE » repéré dans le texte, retiré
+// ensuite — le sommaire porte lui-même ce titre de section, donc le chercher dans le texte ne
+// distingue pas les deux). Jamais scannée pour des actes, plutôt que de deviner. Limite réelle si un
+// fichier ne commence pas au sommaire d'un numéro — signalée aussi dans l'interface, à côté du bouton
+// de ce modèle (voir renderTele()), pas seulement ici.
+function decouperFRAncien(txt,page){
+  if(page===1) return [];
+  const sigs=[]; let m;
+  const reS=new RegExp(SIGNATURE_ANCIEN.source,'g');
+  while((m=reS.exec(txt))!==null) sigs.push({debut:m.index,fin:reS.lastIndex,lieu:m[1],iso:isoDepuisAncien(m[2],m[3],m[4])});
+
+  // Positions de tous les débuts d'acte plausibles : une formule de liaison (tolérante), dont le mot
+  // substantiel IMMÉDIATEMENT AVANT elle, sur la même ligne, est un type d'acte reconnu (tolérant lui
+  // aussi). Dans tous les vrais titres du corpus (« DicisioN relative », « Annèré instituait », «
+  // Arrêté fixant »), le type est directement collé à la formule — jamais séparé par plusieurs mots.
+  // Un visa (« Vu des décrets des 23 mars 1921 et 21 février 1925, déterminant... ») a toujours
+  // plusieurs mots entre « Vu » et la formule : borner la recherche au mot adjacent l'exclut
+  // structurellement, sans avoir besoin de connaître « Vu » comme cas particulier codé en dur.
+  const tokens=[...txt.matchAll(/\S+/g)];
+  const debuts=[];
+  for(let i=0;i<tokens.length;i++){
+    const tok=tokens[i], tnorm=normAncien(tok[0]);
+    if(!tnorm) continue;
+    let posFormule=null;
+    if(motProcheListeAncien(tnorm,FORMULES_SIMPLES_ANCIEN)) posFormule=tok.index;
+    else if(motProcheListeAncien(tnorm,FORMULES_COMPOSEES_ANCIEN)){
+      let j=i+1;
+      while(j<tokens.length && estBruitTokenAncien(tokens[j][0])) j++;
+      if(j<tokens.length && ['a','au','aux'].includes(normAncien(tokens[j][0]))) posFormule=tok.index;
+    }
+    if(posFormule===null) continue;
+
+    const debutLigne=txt.lastIndexOf('\n',tok.index)+1;
+    let type;
+    for(let k=i-1;k>=0 && tokens[k].index>=debutLigne;k--){
+      if(estBruitTokenAncien(tokens[k][0])) continue; // un artefact de bordure de colonne ne compte pas comme mot adjacent
+      // Un vrai début d'acte a toujours son mot-type en capitale (« DÉCRET », « Arrêté ») -- une simple
+      // référence en plein corps de phrase (« l'arrêté de 1936 réglementant... ») ne l'est jamais.
+      if(/^[A-ZÀ-Ü]/.test(tokens[k][0])) type=motProcheTypeAncien(normAncien(tokens[k][0]),TYPES_CANON_ANCIEN);
+      break; // qu'il matche ou non, seul ce mot -- le plus proche de la formule -- est candidat.
+    }
+    if(!type) continue;
+    debuts.push({pos:debutLigne,posFormule:tok.index,type});
+  }
+  if(!debuts.length) return [];
+
+  return debuts.map((d,k)=>{
+    const finProchainDebut=k+1<debuts.length ? debuts[k+1].pos : txt.length;
+    const sigDansActe=sigs.find(s=>s.debut>d.posFormule && s.debut<finProchainDebut);
+    const fin=sigDansActe ? sigDansActe.fin : finProchainDebut;
+    const bloc=txt.slice(d.pos,fin).trim();
+    const relPosFormule=d.posFormule-d.pos;
+    const apresFormule=bloc.slice(relPosFormule);
+    // Objet : jusqu'au premier point après la formule (peut courir sur plusieurs lignes — on ne coupe
+    // donc pas sur \n) OU jusqu'à la première ligne-capitales suivante (l'autorité signataire, « LE
+    // GOUVERNEUR DU CAMEROUN FRANÇAIS, ») si l'OCR n'a capturé aucun point avant — le premier des deux
+    // signaux qui survient, jamais un point trouvé au hasard bien plus loin dans le corps juridique.
+    const finPoint=apresFormule.search(/\.(?:\s|\n|$)/);
+    const lignesApres=apresFormule.split('\n');
+    let compte=0, finCapitales=-1;
+    for(let i=1;i<lignesApres.length;i++){
+      compte+=lignesApres[i-1].length+1;
+      const l=lignesApres[i].trim();
+      if(l && estCapitalesAncien(l)){ finCapitales=compte; break; }
+    }
+    let finObjet;
+    if(finPoint>=0 && (finCapitales<0 || finPoint+1<=finCapitales)) finObjet=finPoint+1;
+    else if(finCapitales>=0) finObjet=finCapitales;
+    else finObjet=apresFormule.length;
+    // Élague les lignes de pur bruit en fin d'objet (artefacts de bordure de colonne : « ~ i », « | »...) —
+    // sans ça, la coupure « ligne-capitales » ci-dessus s'arrête juste APRÈS un tel artefact plutôt que
+    // juste avant : l'objet se terminait par exemple sur « ... en territoire etranger ~ i » au lieu de
+    // « ... en territoire etranger ».
+    const lignesObjet=bloc.slice(0,relPosFormule+finObjet).split('\n');
+    while(lignesObjet.length>1 && estBruitTokenAncien(lignesObjet[lignesObjet.length-1])) lignesObjet.pop();
+    const intitule=lignesObjet.join(' ').replace(/\s*\n\s*/g,' ').replace(/\s+/g,' ').trim();
+    return { type:d.type, numero:'', date_signature:sigDansActe?sigDansActe.iso:'', intitule, texte:bloc };
+  }).filter(Boolean);
+}
+const MODELES_RECONNAISSANCE=[
+  {id:'moderne', nom:'JO de la République du Cameroun', periode:'1962 et après', detecter:decouperFR},
+  {id:'ancien',  nom:'JO du Cameroun français',          periode:'avant 1962',   detecter:decouperFRAncien},
+];
+let MODELE_ACTIF='moderne';
+// Le JO moderne est bilingue : colonne gauche en français, droite en anglais (appariée par titresEN).
+// Le JO du Cameroun français (avant 1962) est entièrement en français sur ses deux colonnes : lues en
+// continu, gauche PUIS droite (jamais entrelacées ligne à ligne), sans appariement anglais. Appliqué aux
+// deux lectures (couche texte et OCR) ; ocrColonnes()/texteColonnes() restent inchangées, le modèle
+// moderne reçoit exactement les mêmes colonnes qu'avant.
+const colonnesPourModele=(gauche,droite)=> MODELE_ACTIF==='ancien'
+  ? {fr:[gauche,droite].filter(Boolean).join('\n\n'), en:''}
+  : {fr:gauche, en:droite};
+
 // --- intitulés de la colonne anglaise, appariés par ordre d'apparition ---
 // Contrairement au français, l'intitulé anglais ne commence presque jamais par le type d'acte
 // (« Appointment of… », « Ratification of… ») : on ne peut pas le repérer par mot-clé en tête de ligne.
@@ -1773,11 +1928,12 @@ async function reconnaitreLocal(fichiers,garderJournal){
   if(!pages.length){ JOURNAL.push({t:'Aucun texte exploitable.',err:1}); enCours=false; return renderTele(); }
 
   FICHIER=`${pages.length} page(s) analysée(s) sans réseau`;
+  const detecterActes=(MODELES_RECONNAISSANCE.find(mo=>mo.id===MODELE_ACTIF)||MODELES_RECONNAISSANCE[0]).detecter;
   let vides=0;
   pages.forEach(pg=>{
-    const [fr,en]=pg.cols;
+    const {fr,en}=colonnesPourModele(pg.cols[0],pg.cols[1]);
     if(!fr || fr.length<40){ vides++; JOURNAL.push({t:`Page ${pg.page} — aucune couche texte : cette page est une image. La reconnaissance de caractères doit être faite en amont, dans le logiciel du scanner.`,err:1}); return; }
-    const actes=decouperFR(fr), tEN=titresEN(en||'');
+    const actes=detecterActes(fr,pg.page), tEN=titresEN(en||'');
     actes.forEach((a,k)=>{
       const n={}; FIDS.forEach(f=> n[f]='');
       n.type=a.type; n.numero=a.numero; n.date_signature=a.date_signature;
@@ -1865,14 +2021,15 @@ async function reconnaitreOCR(fichiers,captures){
   try{ await ocrWorker(); }
   catch(e){ JOURNAL.push({t:'Moteur OCR indisponible : '+e.message,err:1}); enCours=false; return renderTele(); }
 
+  const detecterActes=(MODELES_RECONNAISSANCE.find(mo=>mo.id===MODELE_ACTIF)||MODELES_RECONNAISSANCE[0]).detecter;
   let vides=0;
   for(const pg of pages){
     JOURNAL.push({t:`Page ${pg.page} — reconnaissance OCR en cours…`}); renderTele();
     let fr='',en='';
-    try{ const img=await imageDe(pg.data); [fr,en]=await ocrColonnes(img); }
+    try{ const img=await imageDe(pg.data); ({fr,en}=colonnesPourModele(...await ocrColonnes(img))); }
     catch(e){ JOURNAL.push({t:`Page ${pg.page} — OCR impossible : ${e.message}`,err:1}); continue; }
     if(!fr || fr.length<40){ vides++; JOURNAL.push({t:`Page ${pg.page} — aucun texte exploitable reconnu (image de mauvaise qualité, ou page vide).`,err:1}); continue; }
-    const actes=decouperFR(fr), tEN=titresEN(en||'');
+    const actes=detecterActes(fr,pg.page), tEN=titresEN(en||'');
     actes.forEach((a,k)=>{
       const n={}; FIDS.forEach(f=> n[f]='');
       n.type=a.type; n.numero=a.numero; n.date_signature=a.date_signature;
@@ -1935,6 +2092,12 @@ function renderTele(){
     ${LOT_FILES.length?`<div class="warn" style="margin:0 0 16px"><b>${LOT_FILES.length} fichier(s) issus du versement</b> sont prêts. Cliquez sur « Reconnaître le texte — sans réseau ».</div>`:''}
     <div class="warn" style="margin:0 0 16px;background:var(--paper);border-color:var(--rule);color:var(--ink2)">
       <b>Ce que la reconnaissance sans réseau attend :</b> un PDF <b>portant une couche texte</b>, c'est-à-dire un PDF sur lequel la reconnaissance de caractères a déjà été faite — par le logiciel de votre scanner, ou par tout outil d'OCR. Une image seule, une photographie ou un scan brut ne contient aucun caractère : rien ne peut en être extrait ici. Dans ce cas, collez le texte dans le champ prévu plus bas.</div>
+    <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">Modèle de reconnaissance</div>
+    <div class="offers" style="margin-bottom:18px">${MODELES_RECONNAISSANCE.map(m=>
+      `<div class="offer" data-modele="${m.id}" data-on="${MODELE_ACTIF===m.id?1:0}"><div class="t">${esc(m.nom)}</div><div class="d">${esc(m.periode)}</div></div>`).join('')}</div>
+    <p class="hint" style="margin:-10px 0 18px">Choix explicite, jamais deviné automatiquement — l'agent sait de quel numéro du JO il s'agit.</p>
+    ${MODELE_ACTIF==='ancien'?`<div class="warn" style="margin:0 0 18px">La première page de <b>chaque fichier</b> de ce lot est traitée comme sommaire et jamais scannée pour des actes — si un fichier ne commence pas au sommaire d'un numéro (ex. plusieurs PDF versés ensemble, chacun débutant en plein milieu d'un numéro), vérifiez sa première page manuellement.</div>`:''}
+
     <div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">Fichier existant</div>
     <input type="file" id="fic" accept="application/pdf,image/*,.txt" multiple ${enCours?'disabled':''}>
 
@@ -1994,6 +2157,7 @@ function renderTele(){
       Ce module ne fonctionne que dans cette interface. Sur un poste isolé, il faudra un serveur.</div></div>`;
 
   if(STREAM){ const v=document.getElementById('vid'); if(v){ v.srcObject=STREAM; v.play().catch(()=>{}); } }
+  document.querySelectorAll('[data-modele]').forEach(o=>o.onclick=()=>{ MODELE_ACTIF=o.dataset.modele; renderTele(); });
   const f=document.getElementById('fic'), cm=document.getElementById('cam');
   const co=document.getElementById('colle');
   if(co) co.onchange=()=>{ TEXTECOLLE=co.value; };
